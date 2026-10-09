@@ -16,7 +16,9 @@
     "smoke:http": "node test/smoke-http.mjs",
     "snapshot": "node src/snapshot.js",
     "smoke:remote": "node test/smoke-remote.mjs",
-    "smoke:alerts": "node test/alert-e2e.mjs"
+    "smoke:alerts": "node test/alert-e2e.mjs",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
   "engines": {
     "node": ">=20"
@@ -27,6 +29,7 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "stripe": "23.0.0"
+    "stripe": "23.0.0",
+    "wrangler": "^4.149.0"
   }
 }

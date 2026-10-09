@@ -66,7 +66,7 @@
 <div class="wrap">
   <header>
     <div class="brand">YieldCave <small>v0.5 · open source</small></div>
-    <nav><a href="#live">Live data</a><a href="#install">Install</a><a href="#tools">Tools</a></nav>
+    <nav><a href="#live">Live data</a><a href="#install">Install</a><a href="#tools">Tools</a><a href="https://github.com/yieldcave/yieldcave" rel="noopener">GitHub</a></nav>
   </header>
 
   <div class="hero">
@@ -108,17 +108,16 @@
 
   <section id="install">
     <h2>Install</h2>
-    <p class="sub">Two minutes, no account needed to start.</p>
-    <pre>git clone &lt;your-repo-url&gt; yieldcave &amp;&amp; cd yieldcave &amp;&amp; npm install
-npm run demo        # see the data in your terminal</pre>
-    <p class="sub">Claude Desktop: add this to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></p>
-    <pre>{
-  "mcpServers": {
-    "yieldcave": { "command": "node", "args": ["/absolute/path/to/yieldcave/src/server.js"] }
-  }
-}</pre>
-    <p class="sub">Claude Code:</p>
-    <pre>claude mcp add yieldcave -- node /absolute/path/to/yieldcave/src/server.js</pre>
+    <p class="sub">Hosted. Nothing to run, no account needed to start.</p>
+    <p class="sub"><strong>Claude Code</strong></p>
+    <pre>claude mcp add --transport http yieldcave https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp</pre>
+    <p class="sub"><strong>claude.ai</strong>: Customize → Connectors → Add custom connector → paste the URL above and choose "No sign-in". With a key (Free or Pro allowances), put the key in the URL, since claude.ai cannot send headers:</p>
+    <pre>https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp?key=yc_your_key</pre>
+    <p class="sub">Any MCP client that speaks Streamable HTTP works. Then ask your agent: <em>"Summarize the tokenized treasury market."</em></p>
+    <p class="sub"><strong>Self-host</strong> (optional, MIT licensed, Node 20+):</p>
+    <pre>git clone https://github.com/yieldcave/yieldcave.git &amp;&amp; cd yieldcave &amp;&amp; npm install
+npm run demo        # see the data in your terminal
+npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
   </section>
 
   <section id="tools">
@@ -144,7 +143,7 @@ npm run demo        # see the data in your terminal</pre>
   </section>
 
   <footer>
-    Data: <a href="https://defillama.com" rel="noopener">DefiLlama</a>. <a href="https://yieldcave.com">yieldcave.com</a>
+    Open source: <a href="https://github.com/yieldcave/yieldcave" rel="noopener">github.com/yieldcave/yieldcave</a>. Data: <a href="https://defillama.com" rel="noopener">DefiLlama</a>. Information only, not financial advice.
   </footer>
 </div>
 
