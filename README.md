@@ -135,9 +135,9 @@ Every `tools/call` is counted in the `usage_daily` table against the key, or a h
 ./scripts/configure-stripe.sh sk_live_... price_... whsec_...
 ```
 
-Until then, `upgrade` returns a polite "payments are not switched on yet". The webhook upgrades a key to Pro when checkout completes and downgrades it when the subscription ends; `manage_subscription` opens Stripe's billing portal (return URL https://yieldcave.com). Checkout success and cancel pages default to https://yieldcave.com; set a `SITE_URL` secret to override.
+Until then, `upgrade` returns a polite "payments are not switched on yet". The webhook upgrades a key to Pro when checkout completes and downgrades it when the subscription ends; `manage_subscription` opens Stripe's billing portal (return URL https://yieldcave.com). Checkout success and cancel pages are https://yieldcave.com/thanks and https://yieldcave.com; a `SITE_URL` secret overrides both if you ever need to.
 
-**Landing page** is served for free by a small Edge Function at `https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/site` (Supabase Storage deliberately serves HTML as plain text, so a function does it instead). Edit `site/*.html`, then publish with `./scripts/publish-site.sh`. A custom domain can point at it later.
+**Landing page** is https://yieldcave.com, hosted on Cloudflare (Workers static assets, the current form of Cloudflare Pages). Edit `site/*.html`, then publish with `./scripts/publish-site.sh`, which runs `wrangler pages deploy` (one-time `npx wrangler login` first). The `site` Edge Function is a fallback copy of the same pages and is not linked from anywhere.
 
 Every response carries a disclaimer and the time the data was fetched. Issuer terms are curated by hand in `supabase/functions/_shared/issuers.js` with a `verifiedOn` date and source URLs; update that file when terms change.
 
