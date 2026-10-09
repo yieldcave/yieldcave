@@ -4,7 +4,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { loadMarket as liveLoadMarket } from './data.js';
-import { listAssets, getAsset, marketSummary, compareYield, historySeries, marketChanges } from './tools.js';
+import { listAssets, getAsset, marketSummary, compareYield, historySeries, marketChanges, listStables, stablecoinSummary } from './tools.js';
 import { issuerTerms, ISSUERS, DISCLAIMER_NOTE } from './issuers.js';
 import { PLANS } from './plans.js';
 
@@ -13,7 +13,7 @@ const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, n
 //   alerts:     { create(row) => row, list() => rows, remove(id) => boolean } or null   (adds the alert tools)
 //   account:    { usage(), createKey(email), checkout(), portal() } or null   (adds the account tools)
 export function createServer({ loadMarket = liveLoadMarket, history = null, alerts = null, account = null } = {}) {
-  const server = new McpServer({ name: 'yieldcave', version: '0.6.0' });
+  const server = new McpServer({ name: 'yieldcave', version: '0.7.0' });
 
   server.registerTool(
     'list_rwa_yields',
@@ -69,6 +69,36 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   );
 
   server.registerTool(
+    'list_stablecoin_yields',
+    {
+      title: 'Stablecoin yields by venue',
+      description:
+        'Where USDC, USDT, DAI, USDe and other stablecoins earn yield right now: single-asset pools on lending markets, vaults, credit and basis venues (DefiLlama data, excludes tokenized treasuries, which have their own tools). Each row carries its protocol category group (lending, vault, credit, basis), base vs reward APY, 30-day mean APY and TVL. Default: pools with at least $10M TVL, highest APY first. Information only, not advice.',
+      inputSchema: {
+        symbol: z.string().optional().describe('Stablecoin symbol, e.g. "USDC"'),
+        chain: z.string().optional().describe('Blockchain name, e.g. "Base"'),
+        group: z.enum(['lending', 'vault', 'credit', 'basis', 'other']).optional().describe('Risk/category group'),
+        majorOnly: z.boolean().optional().describe('Only major stablecoins (USDC, USDT, DAI, USDS, USDe, PYUSD, ...)'),
+        minTvlUsd: z.number().nonnegative().optional().describe('Minimum pool TVL in USD (default 10,000,000)'),
+        sortBy: z.enum(['apy', 'tvlUsd']).optional().describe('Default apy'),
+        limit: z.number().int().min(1).max(100).optional().describe('Max rows (default 20)'),
+      },
+    },
+    async (args) => asJson(listStables(await loadMarket(), args)),
+  );
+
+  server.registerTool(
+    'stablecoin_yield_summary',
+    {
+      title: 'Stablecoin yield market summary',
+      description:
+        'Per stablecoin: venues, total TVL, median APY, best venue overall and best collateralized-lending venue; totals by category group; and the median tokenized treasury APY for comparison. Pools with at least $10M TVL by default.',
+      inputSchema: { minTvlUsd: z.number().nonnegative().optional().describe('Pool TVL floor (default 10,000,000)') },
+    },
+    async (args) => asJson(stablecoinSummary(await loadMarket(), args)),
+  );
+
+  server.registerTool(
     'rwa_issuer_terms',
     {
       title: 'Issuer terms for a tokenized treasury',
@@ -85,14 +115,15 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
       {
         title: 'Daily history for one tokenized asset',
         description:
-          'Daily snapshots of total TVL and TVL-weighted APY for one tokenized asset symbol, optionally on one chain, over the last N days (default 30). Includes the change from first to last day.',
+          'Daily snapshots of total TVL and TVL-weighted APY for one symbol, optionally on one chain, over the last N days (default 30). universe "rwa" (tokenized assets, default) or "stablecoin" (stablecoin pools). Includes the change from first to last day.',
         inputSchema: {
-          symbol: z.string().min(1).describe('Token symbol, e.g. "USDY"'),
+          symbol: z.string().min(1).describe('Symbol, e.g. "USDY" or "USDC"'),
           chain: z.string().optional().describe('Restrict to one chain'),
           days: z.number().int().min(1).max(365).optional().describe('How many days back (default 30)'),
+          universe: z.enum(['rwa', 'stablecoin']).optional().describe('Default rwa'),
         },
       },
-      async ({ symbol, chain, days = 30 }) => asJson(historySeries(await history.load(days), { symbol, chain, days })),
+      async ({ symbol, chain, days = 30, universe = 'rwa' }) => asJson(historySeries(await history.load(days), { symbol, chain, days, universe })),
     );
   }
 
@@ -102,18 +133,19 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
       {
         title: 'What changed in the tokenized RWA market',
         description:
-          'Compares the latest market with the snapshot from N days ago (default 1): APY and TVL change per deployment, biggest movers first, plus new and vanished deployments.',
+          'Compares the latest market with the snapshot from N days ago (default 1): APY and TVL change per deployment, biggest movers first, plus new and vanished deployments. universe "rwa" (default) or "stablecoin".',
         inputSchema: {
           days: z.number().int().min(1).max(365).optional().describe('How many days back to compare against (default 1)'),
-          kind: z.enum(['treasury', 'other_rwa']).optional().describe('Default "treasury"'),
+          kind: z.enum(['treasury', 'other_rwa']).optional().describe('Default "treasury" (rwa universe only)'),
+          universe: z.enum(['rwa', 'stablecoin']).optional().describe('Default rwa'),
           limit: z.number().int().min(1).max(100).optional().describe('Max movers (default 15)'),
         },
       },
-      async ({ days = 1, kind = 'treasury', limit = 15 }) => {
+      async ({ days = 1, kind = 'treasury', limit = 15, universe = 'rwa' }) => {
         const [latest, snaps] = await Promise.all([loadMarket(), history.load(days + 1)]);
         const older = [...snaps].sort((a, b) => (a.day < b.day ? -1 : 1))[0];
         if (!older) return asJson({ note: 'No earlier snapshot available yet.', disclaimer: historySeries([], {}).disclaimer });
-        return asJson(marketChanges(latest, { fetchedAt: older.day, assets: older.assets }, { kind, limit }));
+        return asJson(marketChanges(latest, { fetchedAt: older.day, assets: older.assets, stables: older.stables ?? [] }, { kind, limit, universe }));
       },
     );
   }
@@ -124,8 +156,9 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
       {
         title: 'Create a webhook alert',
         description:
-          'Creates a rule that is checked every hour after the data refresh. When any matching deployment crosses the threshold, YieldCave POSTs a JSON payload to your HTTPS webhook (Slack, Discord, Zapier, your own server). Fires at most once per 24 hours per rule. Returns the alert id; keep it to delete the alert later.',
+          'Creates a rule that is checked every hour after the data refresh. When any matching deployment crosses the threshold, YieldCave POSTs a JSON payload to your HTTPS webhook (Slack, Discord, Zapier, your own server). Fires at most once per 24 hours per rule. universe "rwa" (tokenized treasuries, default) or "stablecoin" (stablecoin pools with at least $10M TVL; omit symbol for all major stablecoins). Returns the alert id; keep it to delete the alert later.',
         inputSchema: {
+          universe: z.enum(['rwa', 'stablecoin']).optional().describe('Default rwa'),
           metric: z.enum(['apy', 'tvl']).describe('"apy" in percent, "tvl" in USD'),
           operator: z.enum(['above', 'below']),
           threshold: z.number().describe('e.g. 4.5 for APY, 500000000 for TVL'),

@@ -285,3 +285,84 @@ test('stripe webhook: forged or missing signatures are rejected and nothing is w
   const unconfigured = await handleStripeWebhook({ stripe, rawBody: payload, signature: sigGood, secret: undefined, db: fakeDb().db });
   assert.equal(unconfigured.status, 503);
 });
+
+import { listStables, stablecoinSummary } from '../src/tools.js';
+import { buildStables, CATEGORY_GROUPS } from '../src/data.js';
+
+const stableProtocols = [
+  ...protocols,
+  { slug: 'aave-v3', category: 'Lending' },
+  { slug: 'morpho-blue', category: 'Lending' },
+  { slug: 'accountable', category: 'Uncollateralized Lending' },
+  { slug: 'ethena', category: 'Basis Trading' },
+  { slug: 'yearn', category: 'Yield Aggregator' },
+];
+const stablePools = {
+  data: [
+    ...pools.data,
+    { pool: 's1', project: 'aave-v3', chain: 'Ethereum', symbol: 'USDC', apy: 4.1, apyBase: 4.1, apyReward: 0, apyMean30d: 4.0, tvlUsd: 900_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+    { pool: 's2', project: 'morpho-blue', chain: 'Base', symbol: 'USDC', apy: 6.5, apyBase: 5.0, apyReward: 1.5, apyMean30d: 6.2, tvlUsd: 50_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+    { pool: 's3', project: 'accountable', chain: 'Ethereum', symbol: 'USDC', apy: 12.1, apyBase: 12.1, apyReward: 0, apyMean30d: 12.4, tvlUsd: 11_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+    { pool: 's4', project: 'ethena', chain: 'Ethereum', symbol: 'SUSDE', apy: 7.2, apyBase: 7.2, apyReward: 0, apyMean30d: 8.0, tvlUsd: 2_000_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+    { pool: 's5', project: 'aave-v3', chain: 'Ethereum', symbol: 'USDT', apy: 3.9, apyBase: 3.9, apyReward: 0, apyMean30d: 3.8, tvlUsd: 700_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+    { pool: 'x1', project: 'aave-v3', chain: 'Ethereum', symbol: 'USDC-USDT', apy: 9, tvlUsd: 100_000_000, stablecoin: true, exposure: 'multi', ilRisk: 'yes', outlier: false },
+    { pool: 'x2', project: 'yearn', chain: 'Ethereum', symbol: 'USDC', apy: 99, tvlUsd: 20_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: true },
+    { pool: 'x3', project: 'yearn', chain: 'Ethereum', symbol: 'DAI', apy: 5, tvlUsd: 500_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+    { pool: 'x4', project: 'blackrock-buidl', chain: 'Ethereum', symbol: 'BUIDL', apy: 3.8, tvlUsd: 240_000_000, stablecoin: true, exposure: 'single', ilRisk: 'no', outlier: false },
+  ],
+};
+const smarket = buildMarket(stablePools, stableProtocols, '2026-10-09T00:00:00.000Z');
+
+test('buildStables keeps single-asset, non-outlier, non-RWA stablecoin pools above $1M and groups categories', () => {
+  assert.deepEqual(smarket.stables.map((p) => p.poolId).sort(), ['s1', 's2', 's3', 's4', 's5']);
+  const byId = Object.fromEntries(smarket.stables.map((p) => [p.poolId, p]));
+  assert.equal(byId.s1.group, 'lending');
+  assert.equal(byId.s3.group, 'credit');
+  assert.equal(byId.s4.group, 'basis');
+  assert.equal(byId.s2.apyRewardPercent, 1.5);
+  assert.equal(byId.s1.major, true);
+  assert.equal(byId.s4.major, false);
+  assert.equal(CATEGORY_GROUPS['Yield Aggregator'], 'vault');
+  assert.equal(smarket.assets.length, 6, 'rwa assets unaffected (BUIDL x3 incl. x4, OUSG, TINY... see fixture)');
+});
+
+test('listStables filters and sorts with a $10M default floor', () => {
+  const all = listStables(smarket);
+  assert.deepEqual(all.pools.map((p) => p.poolId), ['s3', 's4', 's2', 's1', 's5'], 'apy desc');
+  assert.deepEqual(listStables(smarket, { group: 'lending' }).pools.map((p) => p.poolId), ['s2', 's1', 's5']);
+  assert.deepEqual(listStables(smarket, { symbol: 'usdc', chain: 'base' }).pools.map((p) => p.poolId), ['s2']);
+  assert.deepEqual(listStables(smarket, { majorOnly: true, sortBy: 'tvlUsd', limit: 2 }).pools.map((p) => p.poolId), ['s1', 's5']);
+  assert.ok(all.groups.credit.includes('higher risk'));
+});
+
+test('stablecoinSummary aggregates per symbol and group with a treasury comparison', () => {
+  const s = stablecoinSummary(smarket);
+  const usdc = s.stablecoins.find((x) => x.symbol === 'USDC');
+  assert.equal(usdc.venues, 3);
+  assert.equal(usdc.totalTvlUsd, 961_000_000);
+  assert.equal(usdc.medianApyPercent, 6.5);
+  assert.equal(usdc.bestAnyGroup.group, 'credit');
+  assert.equal(usdc.bestLending.project, 'morpho-blue');
+  assert.equal(s.byGroup.lending.pools, 3);
+  assert.equal(s.totals.pools, 5);
+  assert.equal(s.tokenizedTreasuryMedianApyPercent, 3.8, 'median of 3.8, 3.78, 4.0, 3.8');
+});
+
+test('history, changes and alerts accept the stablecoin universe', () => {
+  const snaps = [{ day: '2026-10-08', stables: [{ symbol: 'USDC', chain: 'Ethereum', project: 'aave-v3', apyPercent: 4.5, tvlUsd: 800_000_000 }], assets: [] }, { day: '2026-10-09', stables: smarket.stables, assets: smarket.assets }];
+  const h = historySeries(snaps, { symbol: 'USDC', chain: 'Ethereum', universe: 'stablecoin' });
+  assert.equal(h.universe, 'stablecoin');
+  assert.equal(h.series[1].totalTvlUsd, 911_000_000);
+  const none = historySeries(snaps, { symbol: 'USDC', universe: 'rwa' });
+  assert.equal(none.series[1].deployments, 0, 'USDC is not in the rwa universe');
+  const c = marketChanges(smarket, { fetchedAt: '2026-10-08', assets: [], stables: snaps[0].stables }, { universe: 'stablecoin' });
+  assert.equal(c.universe, 'stablecoin');
+  assert.ok(c.movers.some((m) => m.project === 'aave-v3' && m.status === 'changed'));
+  const t = evaluateAlerts(smarket, [
+    { id: 'u1', universe: 'stablecoin', symbol: null, metric: 'apy', operator: 'above', threshold: 6, minTvlUsd: 10_000_000 },
+    { id: 'u2', universe: 'stablecoin', symbol: 'USDT', metric: 'apy', operator: 'below', threshold: 4, minTvlUsd: 10_000_000 },
+    { id: 'u3', universe: 'rwa', symbol: null, metric: 'apy', operator: 'above', threshold: 6 },
+  ]);
+  assert.deepEqual(t.map((x) => x.alert.id), ['u1', 'u2']);
+  assert.deepEqual(t[0].matches.map((m) => m.poolId), ['s2', 's3'], 'major stablecoins only: SUSDE excluded');
+});

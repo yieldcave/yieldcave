@@ -71,7 +71,7 @@
 
   <div class="hero">
     <h1>The tokenized asset market, readable by your agent.</h1>
-    <p class="lede">YieldCave is an MCP server that gives Claude, Cursor and any other AI agent a clean, read-only view of tokenized treasuries and other real-world assets: what exists, on which chain, what it yields, how deep the liquidity is.</p>
+    <p class="lede">YieldCave is an MCP server that gives Claude, Cursor and any other AI agent a clean, read-only view of where dollars earn yield onchain: tokenized treasuries, and stablecoin lending and vault venues. What exists, on which chain, what it yields, how deep the liquidity is, and who may buy it.</p>
     <div class="cta">
       <a class="btn primary" href="#install">Add to Claude in 2 minutes</a>
       <a class="btn" href="#live">See the live table</a>
@@ -94,6 +94,18 @@
       </table>
     </div>
     <p class="status" id="status"></p>
+  </section>
+
+  <section id="stables">
+    <h2>Stablecoin lending yields, right now</h2>
+    <p class="sub">Major stablecoins on collateralized lending markets with at least $10M in the pool. Credit, basis-trade and vault venues are available through the tools with their category labelled.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Stablecoin</th><th>Venue</th><th>Chain</th><th class="num">APY</th><th class="num">30-day avg</th><th class="num">TVL</th></tr></thead>
+        <tbody id="srows"><tr><td colspan="6">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="status" id="sstatus"></p>
   </section>
 
   <section id="why">
@@ -121,13 +133,15 @@ npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
   </section>
 
   <section id="tools">
-    <h2>Ten tools</h2>
+    <h2>Sixteen tools</h2>
     <ul class="tools">
-      <li><code>list_rwa_yields</code>, <code>get_rwa_asset</code>, <code>rwa_market_summary</code> — the market now, by chain, token or in total</li>
+      <li><code>list_rwa_yields</code>, <code>get_rwa_asset</code>, <code>rwa_market_summary</code> — tokenized treasuries and other RWAs, by chain, token or in total</li>
+      <li><code>list_stablecoin_yields</code>, <code>stablecoin_yield_summary</code> — where USDC, USDT, DAI and friends earn yield, with lending, vault, credit and basis venues labelled</li>
       <li><code>compare_yield_to_tokenized_treasuries</code> — simple-interest arithmetic against the best liquid tokenized treasury</li>
       <li><code>rwa_issuer_terms</code> — who may invest, minimums, redemption, fees, legal structure, with sources and a verified date</li>
-      <li><code>rwa_history</code>, <code>rwa_changes</code> — daily snapshots and what moved since N days ago</li>
-      <li><code>create_alert</code>, <code>list_alerts</code>, <code>delete_alert</code> — hourly checks that POST to your webhook when a threshold is crossed</li>
+      <li><code>rwa_history</code>, <code>rwa_changes</code> — daily snapshots and what moved since N days ago, for either universe</li>
+      <li><code>create_alert</code>, <code>list_alerts</code>, <code>delete_alert</code> — hourly checks that POST to your webhook when a treasury or stablecoin threshold is crossed</li>
+      <li><code>create_api_key</code>, <code>my_usage</code>, <code>upgrade</code>, <code>manage_subscription</code> — keys, allowances and billing</li>
     </ul>
   </section>
 
@@ -172,6 +186,14 @@ npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
     rows.innerHTML = t.slice(0, 15).map((p) =>
       `<tr><td><strong>${p.symbol}</strong></td><td>${p.project}</td><td>${p.chain}</td><td class="num">${typeof p.apy === 'number' ? p.apy.toFixed(2) + '%' : '—'}</td><td class="num">${usd(p.tvlUsd)}</td></tr>`).join('');
     status.textContent = `Showing ${Math.min(15, t.length)} of ${t.length} deployments with at least $1M TVL · fetched ${new Date().toLocaleString()} · source DefiLlama`;
+    // Stablecoin lending table: same rules as the list_stablecoin_yields tool with group=lending, majorOnly=true.
+    const MAJOR = new Set(['USDC','USDT','DAI','USDS','USDE','PYUSD','FDUSD','USD1','GHO','FRAX','CRVUSD','LUSD','USDG','AUSD','RLUSD']);
+    const cat = new Map(protocols.map((p) => [p.slug, p.category]));
+    const lend = pools.data.filter((p) => p.stablecoin === true && p.exposure === 'single' && p.ilRisk === 'no' && !p.outlier && p.tvlUsd >= 1e7 && MAJOR.has((p.symbol || '').toUpperCase()) && ['Lending', 'CDP'].includes(cat.get(p.project)))
+      .sort((a, b) => (b.apy || 0) - (a.apy || 0));
+    document.getElementById('srows').innerHTML = lend.slice(0, 10).map((p) =>
+      `<tr><td><strong>${p.symbol}</strong></td><td>${p.project}</td><td>${p.chain}</td><td class="num">${typeof p.apy === 'number' ? p.apy.toFixed(2) + '%' : '—'}</td><td class="num">${typeof p.apyMean30d === 'number' ? p.apyMean30d.toFixed(2) + '%' : '—'}</td><td class="num">${usd(p.tvlUsd)}</td></tr>`).join('');
+    document.getElementById('sstatus').textContent = `Top 10 of ${lend.length} lending pools · APY includes any reward tokens · source DefiLlama`;
   } catch (e) {
     rows.innerHTML = '<tr><td colspan="5">Could not load live data. Run <code>npm run demo</code> locally instead.</td></tr>';
     status.textContent = String(e);

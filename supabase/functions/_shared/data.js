@@ -59,6 +59,7 @@ export function buildMarket(poolsJson, protocolsJson, fetchedAt = new Date().toI
     fetchedAt,
     source: 'DefiLlama (yields.llama.fi, api.llama.fi)',
     assets,
+    stables: buildStables(poolsJson, protocolsJson),
   };
 }
 
@@ -103,4 +104,39 @@ export function fileHistory(dir, fsPromises) {
       return day;
     },
   };
+}
+
+// Stablecoin universe: single-asset stablecoin pools (lending, vaults, credit, basis trades) outside the RWA category.
+// DefiLlama protocol categories are grouped so an agent can tell collateralized lending from unsecured credit.
+export const CATEGORY_GROUPS = {
+  'Lending': 'lending', 'CDP': 'lending',
+  'Yield': 'vault', 'Yield Aggregator': 'vault', 'Onchain Capital Allocator': 'vault', 'Risk Curators': 'vault', 'Liquid Restaking': 'vault', 'Liquid Staking': 'vault',
+  'Uncollateralized Lending': 'credit', 'RWA Lending': 'credit',
+  'Basis Trading': 'basis', 'Derivatives': 'basis', 'Dual-Token Stablecoin': 'basis', 'Algo-Stables': 'basis',
+};
+export const MAJOR_STABLES = new Set(['USDC', 'USDT', 'DAI', 'USDS', 'USDE', 'PYUSD', 'FDUSD', 'USD1', 'GHO', 'FRAX', 'CRVUSD', 'LUSD', 'USDG', 'AUSD', 'RLUSD']);
+
+export function normalizeStablePool(p, category) {
+  return {
+    symbol: String(p.symbol ?? '').toUpperCase(),
+    project: p.project,
+    protocolCategory: category ?? null,
+    group: CATEGORY_GROUPS[category] ?? 'other',
+    chain: p.chain,
+    apyPercent: num(p.apy),
+    apyBasePercent: num(p.apyBase),
+    apyRewardPercent: num(p.apyReward),
+    apyMean30dPercent: num(p.apyMean30d),
+    tvlUsd: Math.round(num(p.tvlUsd) ?? 0),
+    major: MAJOR_STABLES.has(String(p.symbol ?? '').toUpperCase()),
+    poolId: p.pool,
+  };
+}
+
+export function buildStables(poolsJson, protocolsJson, { minTvlUsd = 1_000_000 } = {}) {
+  const category = new Map((protocolsJson ?? []).map((p) => [p.slug, p.category]));
+  return (poolsJson?.data ?? [])
+    .filter((p) => p.stablecoin === true && p.exposure === 'single' && p.ilRisk === 'no' && !p.outlier)
+    .filter((p) => (num(p.tvlUsd) ?? 0) >= minTvlUsd && category.get(p.project) !== 'RWA')
+    .map((p) => normalizeStablePool(p, category.get(p.project)));
 }

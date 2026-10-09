@@ -26,11 +26,11 @@ Deno.serve(async (req) => {
   // Alerts: fire webhooks for rules that are satisfied and have not fired in the last 24 hours.
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
   const { data: rules } = await db.from('alerts').select('*').eq('active', true).or(`last_fired_at.is.null,last_fired_at.lt.${since}`);
-  const triggered = evaluateAlerts(market, (rules ?? []).map((r) => ({ ...r, threshold: Number(r.threshold) })));
+  const triggered = evaluateAlerts(market, (rules ?? []).map((r) => ({ ...r, threshold: Number(r.threshold), minTvlUsd: r.universe === 'stablecoin' ? 10_000_000 : undefined })));
   let fired = 0;
   for (const { alert, matches } of triggered) {
     const payload = {
-      source: 'yieldcave', alertId: alert.id, label: alert.label, symbol: alert.symbol, chain: alert.chain,
+      source: 'yieldcave', alertId: alert.id, label: alert.label, universe: alert.universe ?? 'rwa', symbol: alert.symbol, chain: alert.chain,
       metric: alert.metric, operator: alert.operator, threshold: alert.threshold,
       matches: matches.map((m) => ({ symbol: m.symbol, chain: m.chain, project: m.project, apyPercent: m.apyPercent, tvlUsd: m.tvlUsd })),
       fetchedAt: market.fetchedAt, disclaimer: DISCLAIMER,

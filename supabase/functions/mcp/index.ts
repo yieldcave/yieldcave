@@ -8,7 +8,7 @@ import { PLANS, allowance, alertAllowance, limitMessage, KEY_TOOLS } from '../_s
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const db = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
-const VERSION = '0.6.0';
+const VERSION = '0.7.0';
 
 const sha256 = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))).map((b) => b.toString(16).padStart(2, '0')).join('');
 const today = () => new Date().toISOString().slice(0, 10);
@@ -50,28 +50,28 @@ const history = {
   async load(days: number) {
     const { data, error } = await db.from('snapshots').select('day,data').order('day', { ascending: false }).limit(days);
     if (error) throw new Error(`database: ${error.message}`);
-    return (data ?? []).map((r) => ({ day: r.day, assets: r.data.assets }));
+    return (data ?? []).map((r) => ({ day: r.day, assets: r.data.assets, stables: r.data.stables ?? [] }));
   },
 };
 const hostOf = (u: string) => { try { return new URL(u).host; } catch { return 'invalid'; } };
 
 function alertsFor(caller: Caller) {
   return {
-    async create(a: { metric: string; operator: string; threshold: number; webhookUrl: string; symbol?: string; chain?: string; label?: string }) {
+    async create(a: { metric: string; operator: string; threshold: number; webhookUrl: string; symbol?: string; chain?: string; label?: string; universe?: string }) {
       if (!caller.keyId) throw new Error(limitMessage('alerts', 'anonymous'));
       const used = await activeAlerts(caller.keyId);
       const allow = alertAllowance(caller.tier, used);
       if (!allow.allowed) throw new Error(limitMessage('alerts', caller.tier));
       const { data, error } = await db.from('alerts').insert({
         key_id: caller.keyId, metric: a.metric, operator: a.operator, threshold: a.threshold, webhook_url: a.webhookUrl,
-        symbol: a.symbol?.toUpperCase() ?? null, chain: a.chain ?? null, label: a.label ?? null,
-      }).select('id,created_at,symbol,chain,metric,operator,threshold,label').single();
+        symbol: a.symbol?.toUpperCase() ?? null, chain: a.chain ?? null, label: a.label ?? null, universe: a.universe ?? 'rwa',
+      }).select('id,created_at,universe,symbol,chain,metric,operator,threshold,label').single();
       if (error) throw new Error(`database: ${error.message}`);
       return { ...data, webhookHost: hostOf(a.webhookUrl), checkedEvery: '1 hour', firesAtMost: 'once per 24 hours', alertsUsed: used + 1, alertsLimit: allow.limit };
     },
     async list() {
       if (!caller.keyId) return [];
-      const { data, error } = await db.from('alerts').select('id,created_at,symbol,chain,metric,operator,threshold,label,webhook_url,last_fired_at').eq('active', true).eq('key_id', caller.keyId).order('created_at');
+      const { data, error } = await db.from('alerts').select('id,created_at,universe,symbol,chain,metric,operator,threshold,label,webhook_url,last_fired_at').eq('active', true).eq('key_id', caller.keyId).order('created_at');
       if (error) throw new Error(`database: ${error.message}`);
       return (data ?? []).map(({ webhook_url, ...r }) => ({ ...r, webhookHost: hostOf(webhook_url) }));
     },

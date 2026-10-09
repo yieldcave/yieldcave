@@ -1,12 +1,13 @@
 # YieldCave
 
-**Machine-readable tokenized real-world asset data for AI agents.**
+**Machine-readable onchain yield data for AI agents: tokenized treasuries and stablecoin venues.**
 
 YieldCave is an [MCP](https://modelcontextprotocol.io) server. Add it to Claude Desktop, Claude Code or Cursor and your agent can answer questions like:
 
 - "What tokenized US treasuries are on Solana right now, and what do they yield?"
 - "How much more would $25k earn in the best liquid tokenized treasury than in my 0.4% savings account?"
 - "Summarize the tokenized RWA market."
+- "Where does USDC earn the most on a collateralized lending market with at least $50M behind it?"
 
 It is **read-only**. It never touches a wallet, never moves money and never recommends. That is the point: an index, not a broker.
 
@@ -109,10 +110,12 @@ Secrets (database password, refresh secret) live in `.env.local`, which git igno
 |---|---|
 | `list_rwa_yields` | Tokenized RWA deployments with APY and TVL. Filter by `chain`, `kind` (`treasury` or `other_rwa`), `minTvlUsd`; sort by `tvlUsd` or `apy` |
 | `get_rwa_asset` | One symbol (e.g. `BUIDL`) across every chain, with total TVL and a curated description |
+| `list_stablecoin_yields` | Single-asset stablecoin pools (USDC, USDT, DAI, USDe, ...) on lending, vault, credit and basis venues, each labelled by group, with base vs reward APY, 30-day mean and TVL. $10M floor by default |
+| `stablecoin_yield_summary` | Per stablecoin: venues, TVL, median APY, best venue overall and best collateralized-lending venue; totals by group; tokenized-treasury median for comparison |
 | `rwa_market_summary` | Totals: distinct treasury tokens, TVL, median APY, top five, plus other RWA totals |
 | `compare_yield_to_tokenized_treasuries` | Simple-interest arithmetic: your current APY vs the best liquid tokenized treasury over a horizon, with assumptions spelled out |
 | `rwa_issuer_terms` | Hand-curated terms for BUIDL, USYC, USDY, OUSG, USTB, TBILL, STBT, BENJI: structure, eligibility (US persons?), minimums, redemption, fees, sources, date verified |
-| `rwa_history` | Daily TVL and TVL-weighted APY for one symbol over the last N days, with the change. Hosted: from Postgres snapshots. Local: from `npm run snapshot` files |
+| `rwa_history` | Daily TVL and TVL-weighted APY for one symbol over the last N days, with the change. `universe` is `rwa` or `stablecoin`. Hosted: from Postgres snapshots. Local: from `npm run snapshot` files |
 | `rwa_changes` | What moved since N days ago: APY and TVL change per deployment, new and vanished deployments (hosted, or local with snapshots) |
 | `create_alert`, `list_alerts`, `delete_alert` | Hosted only, needs a key. A rule such as "any treasury APY above 4.5" or "USDY TVL below $1B". Checked hourly; fires a JSON POST to your HTTPS webhook (Slack, Discord, Zapier, your server) at most once per 24 hours |
 | `create_api_key`, `my_usage`, `upgrade`, `manage_subscription` | Hosted only. Free key by email (shown once), plan and usage, a Pro checkout link, and a Stripe billing-portal link to change or cancel |

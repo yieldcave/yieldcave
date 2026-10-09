@@ -15,11 +15,15 @@ check(health.ok && health.marketFetchedAt, `health ${health.version} market ${he
 
 const anon = await connect();
 const { tools } = await anon.listTools();
-check(tools.length === 14, `14 tools, got ${tools.length}: ${tools.map((t) => t.name).join(', ')}`);
+check(tools.length === 16, `16 tools, got ${tools.length}: ${tools.map((t) => t.name).join(', ')}`);
 const s = await call(anon, 'rwa_market_summary');
 check(s.tokenizedTreasuries?.distinctTokens > 0, `summary: ${s.tokenizedTreasuries?.distinctTokens} tokens, TVL ${s.tokenizedTreasuries?.totalTvlUsd}`);
 const h = await call(anon, 'rwa_history', { symbol: 'BUIDL', days: 7 });
 check(h.days >= 1, `history ${h.days} day(s)`);
+const st = await call(anon, 'stablecoin_yield_summary');
+check(st.totals?.pools > 50 && st.stablecoins?.[0]?.symbol, `stablecoins: ${st.totals?.pools} pools, $${st.totals?.tvlUsd}, top ${st.stablecoins?.[0]?.symbol}`);
+const sl = await call(anon, 'list_stablecoin_yields', { symbol: 'USDC', group: 'lending', limit: 3 });
+check(sl.pools?.length === 3 && sl.pools.every((p) => p.group === 'lending'), `USDC lending venues: ${sl.pools?.map((p) => p.project + '@' + p.chain + ' ' + p.apyPercent + '%').join(', ')}`);
 const t = await call(anon, 'rwa_issuer_terms', { symbol: 'USYC' });
 check(t.found && t.eligibility?.usPersons === 'excluded', 'issuer terms USYC');
 const blocked = await call(anon, 'create_alert', { metric: 'apy', operator: 'above', threshold: 1, webhookUrl: 'https://httpbin.org/post' });
