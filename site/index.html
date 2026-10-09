@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YieldCave</title>
+<meta name="description" content="Machine-readable tokenized real-world asset data for AI agents. Read-only. Open source.">
+<style>
+  :root {
+    --bg: #f7f6f2; --surface: #ffffff; --ink: #15171a; --muted: #5d636b; --line: #e3e1da;
+    --accent: #0f5c4d; --accent-ink: #ffffff; --soft: #e6f1ee; --warn: #8a5a00;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101214; --surface: #171a1d; --ink: #ecebe6; --muted: #9aa1a9; --line: #2a2f35;
+      --accent: #5fc3ab; --accent-ink: #0b1c18; --soft: #15302a; --warn: #e0b35a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101214; --surface: #171a1d; --ink: #ecebe6; --muted: #9aa1a9; --line: #2a2f35;
+    --accent: #5fc3ab; --accent-ink: #0b1c18; --soft: #15302a; --warn: #e0b35a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 var(--sans); }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 16px; }
+  header { padding: 28px 0 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+  .brand { font-weight: 700; letter-spacing: -0.01em; font-size: 20px; }
+  .brand small { color: var(--muted); font-weight: 500; margin-left: 8px; font-size: 14px; }
+  nav a { color: var(--muted); text-decoration: none; margin-left: 16px; font-size: 15px; }
+  nav a:hover { color: var(--ink); }
+  .hero { padding: 56px 0 32px; }
+  h1 { font-size: clamp(32px, 5.5vw, 52px); line-height: 1.08; letter-spacing: -0.025em; margin: 0 0 18px; max-width: 16ch; }
+  .lede { font-size: 20px; color: var(--muted); max-width: 56ch; margin: 0 0 26px; }
+  .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 12px 18px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  section { padding: 36px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: 24px; letter-spacing: -0.015em; margin: 0 0 8px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .stat b { display: block; font: 600 26px/1.1 var(--mono); letter-spacing: -0.02em; }
+  .stat span { color: var(--muted); font-size: 14px; }
+  .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; min-width: 560px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .status { color: var(--muted); font-size: 14px; margin: 10px 0 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+  .card h3 { margin: 0 0 6px; font-size: 17px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  pre { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; overflow-x: auto; font: 14px/1.5 var(--mono); margin: 0 0 12px; }
+  code { font-family: var(--mono); font-size: 0.92em; background: var(--soft); padding: 1px 6px; border-radius: 5px; }
+  .tools li { margin: 6px 0; }
+  .notice { border-left: 3px solid var(--warn); padding: 10px 14px; color: var(--muted); font-size: 15px; background: var(--surface); border-radius: 0 8px 8px 0; }
+  footer { padding: 28px 0 48px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">YieldCave <small>v0.5 · open source</small></div>
+    <nav><a href="#live">Live data</a><a href="#install">Install</a><a href="#tools">Tools</a></nav>
+  </header>
+
+  <div class="hero">
+    <h1>The tokenized asset market, readable by your agent.</h1>
+    <p class="lede">YieldCave is an MCP server that gives Claude, Cursor and any other AI agent a clean, read-only view of tokenized treasuries and other real-world assets: what exists, on which chain, what it yields, how deep the liquidity is.</p>
+    <div class="cta">
+      <a class="btn primary" href="#install">Add to Claude in 2 minutes</a>
+      <a class="btn" href="#live">See the live table</a>
+    </div>
+  </div>
+
+  <section id="live">
+    <h2>Tokenized treasuries, right now</h2>
+    <p class="sub">Pulled from DefiLlama's public API when this page loaded. The same numbers your agent sees.</p>
+    <div class="stats">
+      <div class="stat"><b id="s-tvl">—</b><span>Total TVL, tokenized treasuries</span></div>
+      <div class="stat"><b id="s-tokens">—</b><span>Distinct tokens</span></div>
+      <div class="stat"><b id="s-deploy">—</b><span>Chain deployments</span></div>
+      <div class="stat"><b id="s-apy">—</b><span>Median APY</span></div>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Token</th><th>Issuer / project</th><th>Chain</th><th class="num">APY</th><th class="num">TVL</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5">Loading about 2 MB of pool data…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="status" id="status"></p>
+  </section>
+
+  <section id="why">
+    <h2>Why a read-only layer</h2>
+    <p class="sub">Agents will soon shop for yield the way they already shop for flights. Something has to be the index they consult.</p>
+    <div class="grid">
+      <div class="card"><h3>No custody, no execution</h3><p>YieldCave never holds funds or routes orders. It returns data and arithmetic. That keeps it simple to run and simple to trust.</p></div>
+      <div class="card"><h3>Built for models, not dashboards</h3><p>Every field is named for a language model to read. Every response carries its fetch time, source and a disclaimer.</p></div>
+      <div class="card"><h3>Open source, free to run</h3><p>MIT licensed. Runs on your machine with one command. A hosted version with history and alerts comes next.</p></div>
+    </div>
+  </section>
+
+  <section id="install">
+    <h2>Install</h2>
+    <p class="sub">Two minutes, no account needed to start.</p>
+    <pre>git clone &lt;your-repo-url&gt; yieldcave &amp;&amp; cd yieldcave &amp;&amp; npm install
+npm run demo        # see the data in your terminal</pre>
+    <p class="sub">Claude Desktop: add this to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code></p>
+    <pre>{
+  "mcpServers": {
+    "yieldcave": { "command": "node", "args": ["/absolute/path/to/yieldcave/src/server.js"] }
+  }
+}</pre>
+    <p class="sub">Claude Code:</p>
+    <pre>claude mcp add yieldcave -- node /absolute/path/to/yieldcave/src/server.js</pre>
+  </section>
+
+  <section id="tools">
+    <h2>Ten tools</h2>
+    <ul class="tools">
+      <li><code>list_rwa_yields</code>, <code>get_rwa_asset</code>, <code>rwa_market_summary</code> — the market now, by chain, token or in total</li>
+      <li><code>compare_yield_to_tokenized_treasuries</code> — simple-interest arithmetic against the best liquid tokenized treasury</li>
+      <li><code>rwa_issuer_terms</code> — who may invest, minimums, redemption, fees, legal structure, with sources and a verified date</li>
+      <li><code>rwa_history</code>, <code>rwa_changes</code> — daily snapshots and what moved since N days ago</li>
+      <li><code>create_alert</code>, <code>list_alerts</code>, <code>delete_alert</code> — hourly checks that POST to your webhook when a threshold is crossed</li>
+    </ul>
+  </section>
+
+  <section id="pricing">
+    <h2>Plans</h2>
+    <p class="sub">Start without a key. Get a free key from inside your agent by calling <code>create_api_key</code> with your email.</p>
+    <div class="grid">
+      <div class="card"><h3>Anonymous · $0</h3><p>200 calls per day per IP. All market, terms and history tools. No alerts.</p></div>
+      <div class="card"><h3>Free key · $0</h3><p>1,000 calls per day. 3 webhook alerts. Usage visible via <code>my_usage</code>. Send it as an <code>x-api-key</code> header, or <code>?key=</code> on the URL for claude.ai.</p></div>
+      <div class="card"><h3>Pro · $49/month</h3><p>5,000 calls per day. 100 alerts. Call <code>upgrade</code> from your agent for a checkout link, and <code>manage_subscription</code> to change or cancel.</p></div>
+    </div>
+    <p class="notice" style="margin-top:20px">Information only, not financial advice. Figures come from public third-party data and may be delayed or wrong. Verify with the issuer before acting.</p>
+  </section>
+
+  <footer>
+    Data: <a href="https://defillama.com" rel="noopener">DefiLlama</a>. <a href="https://yieldcave.com">yieldcave.com</a>
+  </footer>
+</div>
+
+<script>
+(async () => {
+  // Same filtering logic as src/data.js: keep pools whose project is in DefiLlama's RWA category,
+  // then show the ones we know to be tokenized treasuries.
+  const TREASURY = new Set(['BUIDL','OUSG','USDY','USYC','USTB','TBILL','STBT','BENJI']);
+  const usd = (n) => '$' + (n >= 1e9 ? (n/1e9).toFixed(2) + 'B' : n >= 1e6 ? (n/1e6).toFixed(0) + 'M' : Math.round(n).toLocaleString('en-US'));
+  const status = document.getElementById('status');
+  const rows = document.getElementById('rows');
+  try {
+    const [pools, protocols] = await Promise.all([
+      fetch('https://yields.llama.fi/pools').then((r) => r.json()),
+      fetch('https://api.llama.fi/protocols').then((r) => r.json()),
+    ]);
+    const rwa = new Set(protocols.filter((p) => (p.category || '').toLowerCase() === 'rwa').map((p) => p.slug));
+    const t = pools.data.filter((p) => rwa.has(p.project) && TREASURY.has((p.symbol || '').toUpperCase()) && p.tvlUsd >= 1e6)
+      .sort((a, b) => b.tvlUsd - a.tvlUsd);
+    const apys = t.map((p) => p.apy).filter((x) => typeof x === 'number').sort((a, b) => a - b);
+    const med = apys.length ? (apys.length % 2 ? apys[(apys.length-1)/2] : (apys[apys.length/2-1] + apys[apys.length/2]) / 2) : null;
+    document.getElementById('s-tvl').textContent = usd(t.reduce((s, p) => s + p.tvlUsd, 0));
+    document.getElementById('s-tokens').textContent = new Set(t.map((p) => p.symbol.toUpperCase())).size;
+    document.getElementById('s-deploy').textContent = t.length;
+    document.getElementById('s-apy').textContent = med == null ? '—' : med.toFixed(2) + '%';
+    rows.innerHTML = t.slice(0, 15).map((p) =>
+      `<tr><td><strong>${p.symbol}</strong></td><td>${p.project}</td><td>${p.chain}</td><td class="num">${typeof p.apy === 'number' ? p.apy.toFixed(2) + '%' : '—'}</td><td class="num">${usd(p.tvlUsd)}</td></tr>`).join('');
+    status.textContent = `Showing ${Math.min(15, t.length)} of ${t.length} deployments with at least $1M TVL · fetched ${new Date().toLocaleString()} · source DefiLlama`;
+  } catch (e) {
+    rows.innerHTML = '<tr><td colspan="5">Could not load live data. Run <code>npm run demo</code> locally instead.</td></tr>';
+    status.textContent = String(e);
+  }
+})();
+</script>
+</body>
+</html>

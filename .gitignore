@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+*.log
+.cache/
+.env*
+!.env.example
+BUSINESS_PLAN.md
+HANDOVER.md
+.claude/

@@ -1,0 +1,181 @@
+// Shared tool definitions. Every entry point (stdio, Node HTTP, Supabase Edge Function) calls createServer().
+//   loadMarket: async () => market        (default: live DefiLlama fetch with a 10-minute cache)
+//   history:    { load(days) => [{day, assets}] } or null   (adds the rwa_history tool when present)
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { loadMarket as liveLoadMarket } from './data.js';
+import { listAssets, getAsset, marketSummary, compareYield, historySeries, marketChanges } from './tools.js';
+import { issuerTerms, ISSUERS, DISCLAIMER_NOTE } from './issuers.js';
+import { PLANS } from './plans.js';
+
+const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
+
+//   alerts:     { create(row) => row, list() => rows, remove(id) => boolean } or null   (adds the alert tools)
+//   account:    { usage(), createKey(email), checkout(), portal() } or null   (adds the account tools)
+export function createServer({ loadMarket = liveLoadMarket, history = null, alerts = null, account = null } = {}) {
+  const server = new McpServer({ name: 'yieldcave', version: '0.6.0' });
+
+  server.registerTool(
+    'list_rwa_yields',
+    {
+      title: 'List tokenized real-world asset yields',
+      description:
+        'Lists tokenized real-world asset deployments (tokenized US treasuries, credit, funds) with current APY and TVL, from public DefiLlama data. Filter by chain or kind. Information only, not advice.',
+      inputSchema: {
+        chain: z.string().optional().describe('Blockchain name, e.g. "Ethereum", "Solana", "Base"'),
+        kind: z.enum(['treasury', 'other_rwa']).optional().describe('"treasury" = tokenized US government debt / money-market style'),
+        minTvlUsd: z.number().nonnegative().optional().describe('Minimum total value locked in USD (default 1,000,000)'),
+        limit: z.number().int().min(1).max(100).optional().describe('Max rows (default 20)'),
+        sortBy: z.enum(['tvlUsd', 'apy']).optional().describe('Sort key (default tvlUsd)'),
+      },
+    },
+    async (args) => asJson(listAssets(await loadMarket(), args)),
+  );
+
+  server.registerTool(
+    'get_rwa_asset',
+    {
+      title: 'Get one tokenized asset across chains',
+      description: 'Returns every deployment of one tokenized asset symbol (e.g. BUIDL, USDY, OUSG) across chains, with total TVL and curated description.',
+      inputSchema: { symbol: z.string().min(1).describe('Token symbol, e.g. "BUIDL"') },
+    },
+    async ({ symbol }) => asJson(getAsset(await loadMarket(), symbol)),
+  );
+
+  server.registerTool(
+    'rwa_market_summary',
+    {
+      title: 'Tokenized RWA market summary',
+      description: 'Totals for the tokenized treasury market: distinct tokens, total TVL, median APY, top tokens by TVL, plus totals for other tokenized real-world assets.',
+      inputSchema: {},
+    },
+    async () => asJson(marketSummary(await loadMarket())),
+  );
+
+  server.registerTool(
+    'compare_yield_to_tokenized_treasuries',
+    {
+      title: 'Compare a yield to tokenized treasuries',
+      description:
+        'Given an APY the user currently earns (e.g. a bank savings rate), computes the simple-interest difference versus the highest-yielding liquid tokenized treasury over a horizon. Returns arithmetic and assumptions only; it does not recommend.',
+      inputSchema: {
+        currentApyPercent: z.number().min(0).max(100).describe('APY the user earns today, in percent, e.g. 0.5'),
+        amountUsd: z.number().positive().optional().describe('Amount in USD (default 10,000)'),
+        horizonDays: z.number().int().positive().optional().describe('Horizon in days (default 365)'),
+        minTvlUsd: z.number().nonnegative().optional().describe('Liquidity floor for candidates (default 50,000,000)'),
+      },
+    },
+    async (args) => asJson(compareYield(await loadMarket(), args)),
+  );
+
+  server.registerTool(
+    'rwa_issuer_terms',
+    {
+      title: 'Issuer terms for a tokenized treasury',
+      description:
+        `Hand-curated terms for a tokenized treasury token: legal structure, what backs it, who may invest (US persons?), minimums, redemption method and timing, fees, yield mechanics, with the source URLs and the date verified. Covers ${Object.keys(ISSUERS).join(', ')}. Null means not stated by the source.`,
+      inputSchema: { symbol: z.string().min(1).describe('Token symbol, e.g. "USYC"') },
+    },
+    async ({ symbol }) => asJson({ ...issuerTerms(symbol), disclaimer: DISCLAIMER_NOTE }),
+  );
+
+  if (history) {
+    server.registerTool(
+      'rwa_history',
+      {
+        title: 'Daily history for one tokenized asset',
+        description:
+          'Daily snapshots of total TVL and TVL-weighted APY for one tokenized asset symbol, optionally on one chain, over the last N days (default 30). Includes the change from first to last day.',
+        inputSchema: {
+          symbol: z.string().min(1).describe('Token symbol, e.g. "USDY"'),
+          chain: z.string().optional().describe('Restrict to one chain'),
+          days: z.number().int().min(1).max(365).optional().describe('How many days back (default 30)'),
+        },
+      },
+      async ({ symbol, chain, days = 30 }) => asJson(historySeries(await history.load(days), { symbol, chain, days })),
+    );
+  }
+
+  if (history) {
+    server.registerTool(
+      'rwa_changes',
+      {
+        title: 'What changed in the tokenized RWA market',
+        description:
+          'Compares the latest market with the snapshot from N days ago (default 1): APY and TVL change per deployment, biggest movers first, plus new and vanished deployments.',
+        inputSchema: {
+          days: z.number().int().min(1).max(365).optional().describe('How many days back to compare against (default 1)'),
+          kind: z.enum(['treasury', 'other_rwa']).optional().describe('Default "treasury"'),
+          limit: z.number().int().min(1).max(100).optional().describe('Max movers (default 15)'),
+        },
+      },
+      async ({ days = 1, kind = 'treasury', limit = 15 }) => {
+        const [latest, snaps] = await Promise.all([loadMarket(), history.load(days + 1)]);
+        const older = [...snaps].sort((a, b) => (a.day < b.day ? -1 : 1))[0];
+        if (!older) return asJson({ note: 'No earlier snapshot available yet.', disclaimer: historySeries([], {}).disclaimer });
+        return asJson(marketChanges(latest, { fetchedAt: older.day, assets: older.assets }, { kind, limit }));
+      },
+    );
+  }
+
+  if (alerts) {
+    server.registerTool(
+      'create_alert',
+      {
+        title: 'Create a webhook alert',
+        description:
+          'Creates a rule that is checked every hour after the data refresh. When any matching deployment crosses the threshold, YieldCave POSTs a JSON payload to your HTTPS webhook (Slack, Discord, Zapier, your own server). Fires at most once per 24 hours per rule. Returns the alert id; keep it to delete the alert later.',
+        inputSchema: {
+          metric: z.enum(['apy', 'tvl']).describe('"apy" in percent, "tvl" in USD'),
+          operator: z.enum(['above', 'below']),
+          threshold: z.number().describe('e.g. 4.5 for APY, 500000000 for TVL'),
+          webhookUrl: z.string().url().startsWith('https://').describe('Where to POST when the alert fires'),
+          symbol: z.string().optional().describe('One token, e.g. "USDY". Omit for every tokenized treasury'),
+          chain: z.string().optional().describe('Restrict to one chain'),
+          label: z.string().max(80).optional().describe('Free text shown in the payload'),
+        },
+      },
+      async (args) => asJson(await alerts.create(args)),
+    );
+    server.registerTool(
+      'list_alerts',
+      { title: 'List alerts', description: 'Lists active alert rules (webhook hosts only, never full URLs).', inputSchema: {} },
+      async () => asJson({ alerts: await alerts.list() }),
+    );
+    server.registerTool(
+      'delete_alert',
+      { title: 'Delete an alert', description: 'Deletes an alert by id.', inputSchema: { id: z.string().uuid() } },
+      async ({ id }) => asJson({ id, deleted: await alerts.remove(id) }),
+    );
+  }
+
+  if (account) {
+    server.registerTool(
+      'create_api_key',
+      {
+        title: 'Create a free API key',
+        description:
+          `Creates a free YieldCave API key (${PLANS.free.callsPerDay} calls/day, ${PLANS.free.alerts} alerts) tied to an email address. The key is shown once. Send it on every request as an x-api-key header or Authorization: Bearer. One key per email.`,
+        inputSchema: { email: z.string().email().describe('Where to reach you about the key') },
+      },
+      async ({ email }) => asJson(await account.createKey(email)),
+    );
+    server.registerTool(
+      'my_usage',
+      { title: 'My plan and usage', description: 'Shows the caller\'s plan, calls used today, remaining allowance, alert allowance, and all plans.', inputSchema: {} },
+      async () => asJson({ ...(await account.usage()), plans: PLANS }),
+    );
+    server.registerTool(
+      'upgrade',
+      { title: 'Upgrade to Pro', description: `Returns a checkout link for the Pro plan (${PLANS.pro.price}: ${PLANS.pro.callsPerDay} calls/day, ${PLANS.pro.alerts} alerts). Needs an API key.`, inputSchema: {} },
+      async () => asJson(await account.checkout()),
+    );
+    server.registerTool(
+      'manage_subscription',
+      { title: 'Manage subscription', description: 'Returns a Stripe Billing Portal link to update payment details, see invoices, or cancel the Pro subscription. Needs an API key with a subscription.', inputSchema: {} },
+      async () => asJson(await account.portal()),
+    );
+  }
+
+  return server;
+}

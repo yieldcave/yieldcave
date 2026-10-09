@@ -1,0 +1,32 @@
+{
+  "name": "yieldcave",
+  "version": "0.6.0",
+  "description": "Machine-readable tokenized real-world asset (RWA) data for AI agents, delivered as an MCP server.",
+  "type": "module",
+  "bin": {
+    "yieldcave": "./src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "demo": "node src/demo.js",
+    "test": "node --test test/tools.test.js",
+    "smoke": "node test/smoke.mjs",
+    "site": "python3 -m http.server 8080 --directory site",
+    "start:http": "node src/http.js",
+    "smoke:http": "node test/smoke-http.mjs",
+    "snapshot": "node src/snapshot.js",
+    "smoke:remote": "node test/smoke-remote.mjs",
+    "smoke:alerts": "node test/alert-e2e.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^3.25.0"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "stripe": "23.0.0"
+  }
+}
