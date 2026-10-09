@@ -1,7 +1,7 @@
 // Plans and allowances. Pure functions; the hosted endpoint enforces them, local servers ignore them.
 export const PLANS = {
   anonymous: { name: 'Anonymous', price: '$0', callsPerDay: 200, alerts: 0, how: 'No key. Limit is per IP address per UTC day.' },
-  free: { name: 'Free', price: '$0', callsPerDay: 1000, alerts: 3, how: 'Already have a key? Send it as an x-api-key header (or Authorization: Bearer). On claude.ai, which cannot send headers, edit the connector URL to end with ?key=<your key>. No key yet? Call create_api_key with your email; it is free and shown once.' },
+  free: { name: 'Free', price: '$0', callsPerDay: 1000, alerts: 3, how: 'Already have a key? Send it as an x-api-key header (or Authorization: Bearer). On claude.ai, which cannot send headers, the user (not the assistant) must edit the connector in claude.ai settings so its URL ends with ?key=<your key>. No key yet? Call create_api_key with your email; it is free and shown once.' },
   pro: { name: 'Pro', price: '$49/month', callsPerDay: 5000, alerts: 100, how: 'Call upgrade with your key to get a checkout link.' },
 };
 
