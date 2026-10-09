@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
       const allow = allowance(caller.tier, used);
       if (!allow.allowed) return rpcError(msg.id, limitMessage('calls', caller.tier));
       if (caller.tier === 'anonymous' && toolName && KEY_TOOLS.has(toolName) && toolName !== 'create_api_key') {
-        return rpcError(msg.id, `${toolName} needs an API key. ${PLANS.free.how}`);
+        return rpcError(msg.id, `${toolName} needs an API key. ${PLANS.free.how} Endpoint for claude.ai: ${SUPABASE_URL}/functions/v1/mcp?key=<your key>`);
       }
     }
   }
