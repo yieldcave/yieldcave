@@ -1,0 +1,26 @@
+name: uptime
+on:
+  schedule:
+    - cron: '*/30 * * * *'   # every 30 minutes (GitHub may delay a few minutes)
+  workflow_dispatch:
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Check /health and data freshness
+        run: |
+          set -e
+          URL="https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp/health"
+          BODY=$(curl -sS --max-time 25 "$URL") || { echo "::error::health endpoint unreachable"; exit 1; }
+          echo "$BODY"
+          echo "$BODY" | grep -q '"ok":true' || { echo "::error::health not ok"; exit 1; }
+          TS=$(echo "$BODY" | sed -n 's/.*"marketFetchedAt":"\([^"]*\)".*/\1/p')
+          [ -n "$TS" ] || { echo "::error::no marketFetchedAt (refresh never ran?)"; exit 1; }
+          AGE=$(( $(date +%s) - $(date -d "$TS" +%s) ))
+          echo "market data age: ${AGE}s"
+          [ "$AGE" -lt 10800 ] || { echo "::error::market data is older than 3 hours (${AGE}s); the hourly refresh may be failing"; exit 1; }
+      - name: Check the landing page
+        run: |
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 https://yieldcave.com/)
+          [ "$CODE" = "200" ] || { echo "::error::yieldcave.com returned $CODE"; exit 1; }

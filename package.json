@@ -1,7 +1,7 @@
 {
   "name": "yieldcave",
   "version": "0.6.0",
-  "description": "Machine-readable tokenized real-world asset (RWA) data for AI agents, delivered as an MCP server.",
+  "description": "Tokenized real-world asset data for AI agents: yields, TVL, issuer terms, history and alerts over MCP. Local stdio server; hosted at yieldcave.com.",
   "type": "module",
   "bin": {
     "yieldcave": "./src/server.js"
@@ -31,5 +31,29 @@
   "devDependencies": {
     "stripe": "23.0.0",
     "wrangler": "^4.149.0"
-  }
+  },
+  "homepage": "https://yieldcave.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yieldcave/yieldcave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yieldcave/yieldcave/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "rwa",
+    "tokenized-treasuries",
+    "defi",
+    "yield",
+    "claude",
+    "agents"
+  ],
+  "files": [
+    "src/",
+    "supabase/functions/_shared/",
+    "README.md",
+    "LICENSE"
+  ]
 }

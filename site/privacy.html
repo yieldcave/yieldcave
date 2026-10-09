@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>YieldCave Privacy Policy</title>
+<style>:root{--bg:#f7f6f2;--ink:#15171a;--muted:#5d636b;--line:#e3e1da;--accent:#0f5c4d}@media(prefers-color-scheme:dark){:root{--bg:#101214;--ink:#ecebe6;--muted:#9aa1a9;--line:#2a2f35;--accent:#5fc3ab}}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}.wrap{max-width:760px;margin:0 auto;padding:32px 16px 64px}h1{font-size:34px;letter-spacing:-.02em;margin:24px 0 4px}h2{font-size:21px;margin:32px 0 8px}.meta{color:var(--muted);margin:0 0 24px}a{color:var(--accent)}p,li{color:var(--ink)}nav a{color:var(--muted);text-decoration:none;margin-right:16px}hr{border:0;border-top:1px solid var(--line);margin:32px 0}</style></head><body><div class="wrap"><nav><a href="/">YieldCave</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="https://github.com/yieldcave/yieldcave">GitHub</a></nav>
+<h1>Privacy Policy</h1>
+<p class="meta">Version 0.1, effective 10 October 2026. Draft for review; may change before launch.</p>
+
+<h2>What we collect</h2>
+<ul>
+<li><strong>Email address</strong>, when you create an API key. Used to identify the key, contact you about it, and prefill Stripe checkout.</li>
+<li><strong>API keys</strong>, stored only as SHA-256 hashes. We cannot recover a lost key.</li>
+<li><strong>Usage counts</strong>: the number of tool calls per day per key, or per hashed IP address for anonymous callers. Anonymous IP addresses are hashed with a project-specific value before storage; raw addresses are not stored by us.</li>
+<li><strong>Alert rules</strong> you create, including the webhook URL you register.</li>
+<li><strong>Billing references</strong>: a Stripe customer ID and subscription ID. Stripe collects and holds your payment details under its own privacy policy; we never see card numbers.</li>
+</ul>
+<p>The yieldcave.com website sets no cookies and runs no analytics. The live table on the home page fetches public data directly from DefiLlama in your browser, so DefiLlama sees that request. Our hosting providers (Cloudflare, Supabase) keep standard server logs, which may include IP addresses and request URLs; if you put an API key in a connector URL, that URL may appear in those logs.</p>
+
+<h2>Why we use it</h2>
+<p>To run the Service, enforce plan limits, deliver alerts, bill paid plans, prevent abuse, and respond to you. We do not sell personal information or use it for advertising.</p>
+
+<h2>Who else sees it</h2>
+<ul>
+<li><strong>Supabase</strong> (database and functions, hosted in Sydney, Australia).</li>
+<li><strong>Cloudflare</strong> (website hosting and network).</li>
+<li><strong>Stripe</strong> (payments, billing portal, invoices).</li>
+<li>Your own webhook endpoint, for alerts you create.</li>
+</ul>
+<p>We disclose information if the law requires it.</p>
+
+<h2>How long we keep it</h2>
+<p>Key and billing records for as long as the key exists, plus any period required for tax and accounting. Daily usage counts for 13 months. You can ask us to delete your key and associated records at any time.</p>
+
+<h2>Your rights</h2>
+<p>You can ask what we hold about you, ask for corrections, or ask for deletion. If you are in the EU or UK, you also have the rights set out in the GDPR, including to object and to complain to a supervisory authority. We handle personal information in line with the Australian Privacy Principles. To make a request, open an issue at github.com/yieldcave/yieldcave/issues (do not include your key) or use the contact address on yieldcave.com when published.</p>
+
+<h2>Changes</h2>
+<p>We will post changes here with a new version number and date.</p>
+<hr><p class="meta">YieldCave · <a href="/terms">Terms of Service</a> · <a href="/privacy">Privacy Policy</a> · Questions: open an issue at <a href="https://github.com/yieldcave/yieldcave/issues">github.com/yieldcave/yieldcave/issues</a></p></div></body></html>

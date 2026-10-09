@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.yieldcave/yieldcave",
+  "description": "Tokenized real-world asset data for agents: tokenized treasury yields, TVL, issuer terms, daily history, changes and webhook alerts. Read-only; information, not advice.",
+  "repository": { "url": "https://github.com/yieldcave/yieldcave", "source": "github" },
+  "version_detail": { "version": "0.6.0" },
+  "remotes": [
+    { "transport_type": "streamable-http", "url": "https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp" }
+  ],
+  "packages": [
+    { "registry_name": "npm", "name": "yieldcave", "version": "0.6.0", "runtime_hint": "npx" }
+  ]
+}
