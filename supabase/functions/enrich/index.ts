@@ -2,7 +2,7 @@
 // Called every 10 minutes by pg_cron; guarded by the REFRESH_SECRET header.
 import { createClient } from '@supabase/supabase-js';
 
-const BATCH = 15;
+const BATCH = 6;   // keyless CoinGecko tolerates only a handful of calls per minute from cloud IPs; raise once COINGECKO_API_KEY is set
 const STALE_DAYS = 7;
 
 Deno.serve(async (req) => {
@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     const chains = Object.keys(j.platforms ?? {}).filter(Boolean);
     await db.from('equity_meta').upsert({ coingecko_id: e.coingeckoId, chains, homepage: j.links?.homepage?.[0] ?? null, updated_at: new Date().toISOString() });
     done += 1;
-    await new Promise((res) => setTimeout(res, 1500));   // stay well under CoinGecko's free-tier rate
+    await new Promise((res) => setTimeout(res, key ? 1500 : 7000));
   }
   return Response.json({ ok: true, candidates: todo.length, enriched: done, rateLimited, remaining: equities.length - updated.size });
 });

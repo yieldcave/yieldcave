@@ -148,18 +148,23 @@ export function buildStables(poolsJson, protocolsJson, { minTvlUsd = 1_000_000 }
 // ---- Tokenized equities fetch (CoinGecko + Yahoo chart quotes). Used by the hosted refresh and by the local lazy loader.
 import { CG, EQUITY_CATEGORIES, buildEquities } from './equities.js';
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 export async function fetchEquityPages(fetchImpl = globalThis.fetch, { apiKey = null, maxPages = 4 } = {}) {
   const headers = { accept: 'application/json', ...(apiKey ? { 'x-cg-demo-api-key': apiKey } : {}) };
   const pagesByKind = {};
   for (const [kind, category] of Object.entries(EQUITY_CATEGORIES)) {
     const pages = [];
     for (let page = 1; page <= (kind === 'stock' ? maxPages : 1); page++) {
-      const r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers });
+      // Keyless CoinGecko access is throttled hard from cloud IPs: space the calls and retry once on 429.
+      let r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers });
+      if (r.status === 429) { await sleep(apiKey ? 2000 : 12_000); r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers }); }
       if (!r.ok) break;
       const rows = await r.json();
       if (!Array.isArray(rows) || !rows.length) break;
       pages.push(rows);
       if (rows.length < 250) break;
+      await sleep(apiKey ? 500 : 3000);
     }
     pagesByKind[kind] = pages;
   }
