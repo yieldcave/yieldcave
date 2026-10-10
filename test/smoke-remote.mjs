@@ -25,7 +25,9 @@ check(st.totals?.pools > 50 && st.stablecoins?.[0]?.symbol, `stablecoins: ${st.t
 const sl = await call(anon, 'list_stablecoin_yields', { symbol: 'USDC', group: 'lending', limit: 3 });
 check(sl.pools?.length === 3 && sl.pools.every((p) => p.group === 'lending'), `USDC lending venues: ${sl.pools?.map((p) => p.project + '@' + p.chain + ' ' + p.apyPercent + '%').join(', ')}`);
 const t = await call(anon, 'rwa_issuer_terms', { symbol: 'USYC' });
-check(t.found && t.eligibility?.usPersons === 'excluded', 'issuer terms USYC');
+check(t.found && t.eligibility?.usPersons === 'excluded' && t.summaryOnly === true, 'issuer terms USYC (summary on anonymous)');
+const dg = await call(anon, 'list_stablecoin_yields', { group: 'credit' });
+check(dg.deniedGroup === 'credit', 'credit group gated for anonymous');
 const blocked = await call(anon, 'create_alert', { metric: 'apy', operator: 'above', threshold: 1, webhookUrl: 'https://httpbin.org/post' });
 check(blocked.isError && /API key/.test(JSON.stringify(blocked)), 'anonymous create_alert is refused');
 

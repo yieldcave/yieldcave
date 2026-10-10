@@ -1,6 +1,6 @@
 {
   "name": "yieldcave",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Tokenized real-world asset data for AI agents: yields, TVL, issuer terms, history and alerts over MCP. Local stdio server; hosted at yieldcave.com.",
   "type": "module",
   "bin": {

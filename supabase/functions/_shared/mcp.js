@@ -6,14 +6,15 @@ import { z } from 'zod';
 import { loadMarket as liveLoadMarket } from './data.js';
 import { listAssets, getAsset, marketSummary, compareYield, historySeries, marketChanges, listStables, stablecoinSummary } from './tools.js';
 import { issuerTerms, ISSUERS, DISCLAIMER_NOTE } from './issuers.js';
-import { PLANS } from './plans.js';
+import { PLANS, UPGRADE_NOTE, clampDays, stableAccess, trimIssuerTerms } from './plans.js';
 
 const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 
 //   alerts:     { create(row) => row, list() => rows, remove(id) => boolean } or null   (adds the alert tools)
 //   account:    { usage(), createKey(email), checkout(), portal() } or null   (adds the account tools)
-export function createServer({ loadMarket = liveLoadMarket, history = null, alerts = null, account = null } = {}) {
-  const server = new McpServer({ name: 'yieldcave', version: '0.7.0' });
+//   plan:       a PLANS entry for the caller (hosted) or null (self-hosted: no depth limits)
+export function createServer({ loadMarket = liveLoadMarket, history = null, alerts = null, account = null, plan = null } = {}) {
+  const server = new McpServer({ name: 'yieldcave', version: '0.8.0' });
 
   server.registerTool(
     'list_rwa_yields',
@@ -73,7 +74,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
     {
       title: 'Stablecoin yields by venue',
       description:
-        'Where USDC, USDT, DAI, USDe and other stablecoins earn yield right now: single-asset pools on lending markets, vaults, credit and basis venues (DefiLlama data, excludes tokenized treasuries, which have their own tools). Each row carries its protocol category group (lending, vault, credit, basis), base vs reward APY, 30-day mean APY and TVL. Default: pools with at least $10M TVL, highest APY first. Information only, not advice.',
+        'Where USDC, USDT, DAI, USDe and other stablecoins earn yield right now: single-asset pools on lending markets and vaults (credit and basis venues on Pro) (DefiLlama data, excludes tokenized treasuries, which have their own tools). Each row carries its protocol category group (lending, vault, credit, basis), base vs reward APY, 30-day mean APY and TVL. Default: pools with at least $10M TVL, highest APY first. Information only, not advice.',
       inputSchema: {
         symbol: z.string().optional().describe('Stablecoin symbol, e.g. "USDC"'),
         chain: z.string().optional().describe('Blockchain name, e.g. "Base"'),
@@ -84,7 +85,15 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
         limit: z.number().int().min(1).max(100).optional().describe('Max rows (default 20)'),
       },
     },
-    async (args) => asJson(listStables(await loadMarket(), args)),
+    async (args) => {
+      const access = stableAccess(plan, { group: args.group, limit: args.limit });
+      if (access.deniedGroup) return asJson({ matched: 0, pools: [], deniedGroup: access.deniedGroup, note: `The ${access.deniedGroup} group (and its yields) is on Pro. Free and anonymous callers see lending and vault venues. ${UPGRADE_NOTE}` });
+      const market = await loadMarket();
+      const filtered = access.groups ? { ...market, stables: (market.stables ?? []).filter((p) => access.groups.includes(p.group)) } : market;
+      const out = listStables(filtered, { ...args, limit: access.limit });
+      if (access.limited) out.planNote = `Showing ${access.groups?.join(' and ')} venues, up to ${access.limit} rows. ${UPGRADE_NOTE}`;
+      return asJson(out);
+    },
   );
 
   server.registerTool(
@@ -103,10 +112,10 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
     {
       title: 'Issuer terms for a tokenized treasury',
       description:
-        `Hand-curated terms for a tokenized treasury token: legal structure, what backs it, who may invest (US persons?), minimums, redemption method and timing, fees, yield mechanics, with the source URLs and the date verified. Covers ${Object.keys(ISSUERS).join(', ')}. Null means not stated by the source.`,
+        `Hand-curated terms for a tokenized treasury token: who may invest (US persons?), minimum, structure (summary on Free; Pro adds what backs it, domicile, redemption method and timing, fees, yield mechanics and source URLs). Covers ${Object.keys(ISSUERS).join(', ')}. Null means not stated by the source.`,
       inputSchema: { symbol: z.string().min(1).describe('Token symbol, e.g. "USYC"') },
     },
-    async ({ symbol }) => asJson({ ...issuerTerms(symbol), disclaimer: DISCLAIMER_NOTE }),
+    async ({ symbol }) => asJson({ ...trimIssuerTerms(plan, issuerTerms(symbol)), disclaimer: DISCLAIMER_NOTE }),
   );
 
   if (history) {
@@ -115,7 +124,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
       {
         title: 'Daily history for one tokenized asset',
         description:
-          'Daily snapshots of total TVL and TVL-weighted APY for one symbol, optionally on one chain, over the last N days (default 30). universe "rwa" (tokenized assets, default) or "stablecoin" (stablecoin pools). Includes the change from first to last day.',
+          'Daily snapshots of total TVL and TVL-weighted APY for one symbol, optionally on one chain, over the last N days (default 30; Free and anonymous plans see 7, Pro the full history). universe "rwa" (tokenized assets, default) or "stablecoin" (stablecoin pools). Includes the change from first to last day.',
         inputSchema: {
           symbol: z.string().min(1).describe('Symbol, e.g. "USDY" or "USDC"'),
           chain: z.string().optional().describe('Restrict to one chain'),
@@ -123,7 +132,12 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
           universe: z.enum(['rwa', 'stablecoin']).optional().describe('Default rwa'),
         },
       },
-      async ({ symbol, chain, days = 30, universe = 'rwa' }) => asJson(historySeries(await history.load(days), { symbol, chain, days, universe })),
+      async ({ symbol, chain, days = 30, universe = 'rwa' }) => {
+        const c = clampDays(plan, days, 'history');
+        const out = historySeries(await history.load(c.days), { symbol, chain, days: c.days, universe });
+        if (c.limited) out.planNote = `History limited to ${c.max} days on this plan. ${UPGRADE_NOTE}`;
+        return asJson(out);
+      },
     );
   }
 
@@ -142,10 +156,14 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
         },
       },
       async ({ days = 1, kind = 'treasury', limit = 15, universe = 'rwa' }) => {
+        const c = clampDays(plan, days, 'changes');
+        days = c.days;
         const [latest, snaps] = await Promise.all([loadMarket(), history.load(days + 1)]);
         const older = [...snaps].sort((a, b) => (a.day < b.day ? -1 : 1))[0];
         if (!older) return asJson({ note: 'No earlier snapshot available yet.', disclaimer: historySeries([], {}).disclaimer });
-        return asJson(marketChanges(latest, { fetchedAt: older.day, assets: older.assets, stables: older.stables ?? [] }, { kind, limit, universe }));
+        const out = marketChanges(latest, { fetchedAt: older.day, assets: older.assets, stables: older.stables ?? [] }, { kind, limit, universe });
+        if (c.limited) out.planNote = `Changes limited to ${c.max} day(s) back on this plan. ${UPGRADE_NOTE}`;
+        return asJson(out);
       },
     );
   }
@@ -188,19 +206,19 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
       {
         title: 'Create a free API key',
         description:
-          `Creates a free YieldCave API key (${PLANS.free.callsPerDay} calls/day, ${PLANS.free.alerts} alerts) tied to an email address. The key is shown once. Send it on every request as an x-api-key header or Authorization: Bearer. One key per email.`,
+          `Creates a free YieldCave API key (${PLANS.free.callsPerDay} calls/day, ${PLANS.free.alerts} alerts, 7 days of history) tied to an email address. The key is shown once. Send it on every request as an x-api-key header or Authorization: Bearer. One key per email.`,
         inputSchema: { email: z.string().email().describe('Where to reach you about the key') },
       },
       async ({ email }) => asJson(await account.createKey(email)),
     );
     server.registerTool(
       'my_usage',
-      { title: 'My plan and usage', description: 'Shows the caller\'s plan, calls used today, remaining allowance, alert allowance, and all plans.', inputSchema: {} },
+      { title: 'My plan and usage', description: 'Shows the caller\'s plan, calls used today, remaining allowance, alert allowance, depth limits, and what each plan includes.', inputSchema: {} },
       async () => asJson({ ...(await account.usage()), plans: PLANS }),
     );
     server.registerTool(
       'upgrade',
-      { title: 'Upgrade to Pro', description: `Returns a checkout link for the Pro plan (${PLANS.pro.price}: ${PLANS.pro.callsPerDay} calls/day, ${PLANS.pro.alerts} alerts). Needs an API key.`, inputSchema: {} },
+      { title: 'Upgrade to Pro', description: `Returns a checkout link for the Pro plan (${PLANS.pro.price}: full history and changes, all stablecoin venues, full issuer terms, ${PLANS.pro.alerts} alerts, ${PLANS.pro.callsPerDay} calls/day). Needs an API key.`, inputSchema: {} },
       async () => asJson(await account.checkout()),
     );
     server.registerTool(

@@ -8,7 +8,7 @@ import { PLANS, allowance, alertAllowance, limitMessage, KEY_TOOLS } from '../_s
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const db = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
-const VERSION = '0.7.0';
+const VERSION = '0.8.0';
 
 const sha256 = async (s: string) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))).map((b) => b.toString(16).padStart(2, '0')).join('');
 const today = () => new Date().toISOString().slice(0, 10);
@@ -88,7 +88,8 @@ function accountFor(caller: Caller) {
   return {
     async usage() {
       const [calls, alerts] = await Promise.all([callsToday(caller.subject), activeAlerts(caller.keyId)]);
-      return { plan: PLANS[caller.tier].name, email: caller.email, calls: allowance(caller.tier, calls), alerts: alertAllowance(caller.tier, alerts), resetsAt: nextUtcMidnight() };
+      const p = PLANS[caller.tier];
+      return { plan: p.name, email: caller.email, calls: allowance(caller.tier, calls), alerts: alertAllowance(caller.tier, alerts), depth: { historyDays: p.historyDays, changesDays: p.changesDays, stableGroups: p.stableGroups, stableRows: p.stableRows, issuerTerms: p.issuerTerms }, resetsAt: nextUtcMidnight() };
     },
     async createKey(email: string) {
       const existing = await db.from('api_keys').select('id,prefix,tier').eq('email', email.toLowerCase()).maybeSingle();
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
     }
   }
   caller ??= await identify(req);
-  const server = createServer({ loadMarket, history, alerts: alertsFor(caller), account: accountFor(caller) });
+  const server = createServer({ loadMarket, history, alerts: alertsFor(caller), account: accountFor(caller), plan: PLANS[caller.tier] });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);
   const res = await transport.handleRequest(req, { parsedBody });

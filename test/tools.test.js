@@ -198,8 +198,8 @@ test('issuer records are complete and consistent', () => {
 import { PLANS, allowance, alertAllowance, limitMessage, KEY_TOOLS } from '../src/plans.js';
 
 test('plans and allowances', () => {
-  assert.equal(allowance('anonymous', 199).allowed, true);
-  assert.equal(allowance('anonymous', 200).allowed, false);
+  assert.equal(allowance('anonymous', 999).allowed, true);
+  assert.equal(allowance('anonymous', 1000).allowed, false);
   assert.equal(allowance('free', 999).remaining, 1);
   assert.equal(allowance('pro', 0).limit, PLANS.pro.callsPerDay);
   assert.equal(allowance('bogus', 0).limit, PLANS.anonymous.callsPerDay, 'unknown tier falls back to anonymous');
@@ -365,4 +365,56 @@ test('history, changes and alerts accept the stablecoin universe', () => {
   ]);
   assert.deepEqual(t.map((x) => x.alert.id), ['u1', 'u2']);
   assert.deepEqual(t[0].matches.map((m) => m.poolId), ['s2', 's3'], 'major stablecoins only: SUSDE excluded');
+});
+
+import { clampDays, stableAccess, trimIssuerTerms, UPGRADE_NOTE } from '../src/plans.js';
+import { createServer } from '../src/mcp.js';
+
+test('depth gating: days, stablecoin groups and issuer terms follow the plan', () => {
+  assert.deepEqual(clampDays(PLANS.free, 30, 'history'), { days: 7, limited: true, max: 7 });
+  assert.deepEqual(clampDays(PLANS.pro, 30, 'history'), { days: 30, limited: false });
+  assert.deepEqual(clampDays(null, 400, 'changes'), { days: 400, limited: false }, 'self-hosted is unlimited');
+  assert.equal(clampDays(PLANS.anonymous, 3, 'changes').days, 1);
+  const a = stableAccess(PLANS.free, { group: 'credit', limit: 50 });
+  assert.equal(a.deniedGroup, 'credit');
+  const b = stableAccess(PLANS.free, { group: undefined, limit: 50 });
+  assert.equal(b.limit, 10); assert.deepEqual(b.groups, ['lending', 'vault']); assert.equal(b.limited, true);
+  const c = stableAccess(PLANS.pro, { group: 'basis', limit: 50 });
+  assert.equal(c.deniedGroup, null); assert.equal(c.limit, 50);
+  const full = issuerTerms('USYC');
+  const trimmed = trimIssuerTerms(PLANS.free, full);
+  assert.equal(trimmed.summaryOnly, true);
+  assert.equal(trimmed.eligibility.usPersons, 'excluded');
+  assert.equal(trimmed.minimums.initialUsd, 100_000);
+  assert.equal('fees' in trimmed, false);
+  assert.equal(trimIssuerTerms(PLANS.pro, full).fees.performance, '10% of yield');
+  assert.equal(trimIssuerTerms(PLANS.free, issuerTerms('NOPE')).found, false);
+  assert.match(UPGRADE_NOTE, /upgrade/);
+});
+
+test('createServer applies the plan to list_stablecoin_yields, rwa_history and rwa_changes', async () => {
+  const snaps = [
+    { day: '2026-10-01', assets: [], stables: [] }, { day: '2026-10-05', assets: [], stables: [] },
+    { day: '2026-10-09', assets: smarket.assets, stables: smarket.stables },
+  ];
+  const mk = (plan) => createServer({ loadMarket: async () => smarket, history: { load: async (d) => snaps.slice(-d) }, plan });
+  const call = async (server, name, args) => JSON.parse((await server._registeredTools[name].handler(args, {})).content[0].text);
+  const free = mk(PLANS.free);
+  const l = await call(free, 'list_stablecoin_yields', { minTvlUsd: 1 });
+  assert.ok(l.pools.every((p) => ['lending', 'vault'].includes(p.group)), 'credit and basis hidden on Free');
+  assert.match(l.planNote, /Pro/);
+  const d = await call(free, 'list_stablecoin_yields', { group: 'credit' });
+  assert.equal(d.deniedGroup, 'credit');
+  const h = await call(free, 'rwa_history', { symbol: 'USDC', universe: 'stablecoin', days: 30 });
+  assert.equal(h.days, 1, 'only snapshots within the 7-day window (one here)');
+  assert.match(h.planNote, /7 days/);
+  const pro = mk(PLANS.pro);
+  const lp = await call(pro, 'list_stablecoin_yields', { minTvlUsd: 1 });
+  assert.ok(lp.pools.some((p) => p.group === 'credit'));
+  assert.equal(lp.planNote, undefined);
+  const t = await call(pro, 'rwa_issuer_terms', { symbol: 'BUIDL' });
+  assert.equal(t.summaryOnly, undefined);
+  const selfHosted = mk(null);
+  const lh = await call(selfHosted, 'list_stablecoin_yields', { minTvlUsd: 1, limit: 100 });
+  assert.equal(lh.planNote, undefined);
 });
