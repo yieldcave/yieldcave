@@ -1,7 +1,7 @@
 // Fetches DefiLlama, stores the normalized market in `market_latest` and today's snapshot in `snapshots`.
 // Called hourly by pg_cron (see migrations) and guarded by the REFRESH_SECRET header.
 import { createClient } from '@supabase/supabase-js';
-import { buildMarket, POOLS_URL, PROTOCOLS_URL } from '../_shared/data.js';
+import { buildMarket, POOLS_URL, PROTOCOLS_URL, loadEquities } from '../_shared/data.js';
 import { evaluateAlerts, DISCLAIMER } from '../_shared/tools.js';
 
 Deno.serve(async (req) => {
@@ -17,6 +17,17 @@ Deno.serve(async (req) => {
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
     auth: { persistSession: false },
   });
+  // Tokenized equities: CoinGecko categories + underlying quotes + chain metadata gathered by the enrich job.
+  let equitiesError: string | null = null;
+  try {
+    const { data: metaRows } = await db.from('equity_meta').select('coingecko_id,chains');
+    const meta = Object.fromEntries((metaRows ?? []).map((r) => [r.coingecko_id, { chains: r.chains }]));
+    (market as Record<string, unknown>).equities = await loadEquities({ apiKey: Deno.env.get('COINGECKO_API_KEY') ?? null, meta });
+  } catch (e) {
+    equitiesError = (e as Error).message;
+    const { data: prev } = await db.from('market_latest').select('data').eq('id', 1).maybeSingle();
+    (market as Record<string, unknown>).equities = prev?.data?.equities ?? [];   // keep the last good set
+  }
   const day = market.fetchedAt.slice(0, 10);
   const row = { fetched_at: market.fetchedAt, data: market };
   const a = await db.from('market_latest').upsert({ id: 1, ...row });
@@ -45,5 +56,5 @@ Deno.serve(async (req) => {
       if (r.ok || r.status === 204) { fired += 1; await db.from('alerts').update({ last_fired_at: market.fetchedAt }).eq('id', alert.id); }
     } catch (_) { /* webhook unreachable: try again next hour */ }
   }
-  return Response.json({ ok: true, day, fetchedAt: market.fetchedAt, assets: market.assets.length, alertsChecked: (rules ?? []).length, alertsFired: fired });
+  return Response.json({ ok: true, day, fetchedAt: market.fetchedAt, assets: market.assets.length, stables: market.stables.length, equities: (market as Record<string, unknown[]>).equities.length, equitiesError, alertsChecked: (rules ?? []).length, alertsFired: fired });
 });

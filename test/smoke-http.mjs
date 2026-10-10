@@ -18,8 +18,8 @@ try {
   const a = JSON.parse(r.content[0].text);
   console.log('BUIDL chains:', a.chains?.join(', '), 'total TVL:', a.totalTvlUsd);
   await client.close();
-  // The Node HTTP entry point has no history or alert store, so it serves the seven base tools.
-if (tools.length !== 7 || !a.found) { console.error('SMOKE-HTTP FAIL'); process.exit(1); }
+  // The Node HTTP entry point has no history or alert store, so it serves the ten base tools.
+if (tools.length !== 10 || !a.found) { console.error('SMOKE-HTTP FAIL'); process.exit(1); }
   console.log('SMOKE-HTTP PASS');
 } finally {
   child.kill();

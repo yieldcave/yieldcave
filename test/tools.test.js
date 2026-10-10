@@ -418,3 +418,59 @@ test('createServer applies the plan to list_stablecoin_yields, rwa_history and r
   const lh = await call(selfHosted, 'list_stablecoin_yields', { minTvlUsd: 1, limit: 100 });
   assert.equal(lh.planNote, undefined);
 });
+
+import { parseEquity, buildEquities, listEquities, getEquity, equitySummary } from '../src/equities.js';
+
+const cgStock = [
+  { id: 'tesla-xstock', symbol: 'tslax', name: 'Tesla xStock', current_price: 382, market_cap: 72_000_000, total_volume: 2_000_000, price_change_percentage_24h: 1.234 },
+  { id: 'tesla-bstock', symbol: 'tslab', name: 'Tesla (bStocks Tokenized Stock)', current_price: 379, market_cap: 22_000_000, total_volume: 1_300_000, price_change_percentage_24h: -0.5 },
+  { id: 'nvidia-ondo', symbol: 'nvdaon', name: 'NVIDIA (Ondo Tokenized Stock)', current_price: 230.66, market_cap: 35_000_000, total_volume: 820_000, price_change_percentage_24h: 0 },
+  { id: 'spacex-xstock', symbol: 'spcxx', name: 'SpaceX xStock', current_price: 163, market_cap: 47_000_000, total_volume: 6_000_000, price_change_percentage_24h: 2 },
+  { id: 'tiny', symbol: 'tiny', name: 'Tiny Thing (Robinhood)', current_price: 1, market_cap: 10_000, total_volume: 1, price_change_percentage_24h: 0 },
+  { id: 'tesla-xstock', symbol: 'tslax', name: 'duplicate', current_price: 1, market_cap: 1, total_volume: 1 },
+];
+const cgEtf = [{ id: 'spy-xstock', symbol: 'spyx', name: 'SPDR S&P 500 xStock', current_price: 600, market_cap: 5_000_000, total_volume: 100_000, price_change_percentage_24h: 0.1 }];
+const quotes = { TSLA: { price: 375, asOf: '2026-10-10T20:00:00.000Z' }, NVDA: { price: 230.66, asOf: '2026-10-10T20:00:00.000Z' } };
+const meta = { 'tesla-xstock': { chains: ['solana', 'ethereum'] } };
+const emarket = { fetchedAt: '2026-10-11T00:00:00.000Z', assets: [], stables: [], equities: buildEquities({ stock: [cgStock], etf: [cgEtf] }, { quotes, meta }) };
+
+test('parseEquity detects issuers and underlyings from CoinGecko names', () => {
+  assert.equal(parseEquity(cgStock[0], 'stock').issuer, 'xStocks (Backed)');
+  assert.equal(parseEquity(cgStock[0], 'stock').underlying, 'TSLA');
+  assert.equal(parseEquity(cgStock[1], 'stock').issuer, 'bStocks');
+  assert.equal(parseEquity(cgStock[1], 'stock').underlying, 'TSLA');
+  assert.equal(parseEquity(cgStock[2], 'stock').issuer, 'Ondo Global Markets');
+  assert.equal(parseEquity(cgStock[2], 'stock').underlying, 'NVDA');
+  assert.equal(parseEquity({ symbol: 'zzz', name: 'Unknown Corp Token' }, 'stock').issuer, 'other');
+  assert.equal(parseEquity({ symbol: 'zzz', name: 'Unknown Corp Token' }, 'stock').underlying, null);
+});
+
+test('buildEquities dedupes, attaches quotes, premium and chains, sorts by market cap', () => {
+  const e = emarket.equities;
+  assert.equal(e.length, 6, 'duplicate id dropped');
+  assert.equal(e[0].symbol, 'TSLAX');
+  assert.equal(e[0].premiumPercent, 1.87, '(382-375)/375');
+  assert.deepEqual(e[0].chains, ['solana', 'ethereum']);
+  assert.equal(e.find((x) => x.symbol === 'NVDAON').premiumPercent, 0);
+  assert.equal(e.find((x) => x.symbol === 'SPCXX').premiumPercent, null, 'no quote for a private company');
+  assert.equal(e.find((x) => x.symbol === 'SPYX').kind, 'etf');
+});
+
+test('listEquities, getEquity and equitySummary', () => {
+  assert.deepEqual(listEquities(emarket, { underlying: 'tsla' }).equities.map((x) => x.symbol), ['TSLAX', 'TSLAB']);
+  assert.deepEqual(listEquities(emarket, { chain: 'Solana' }).equities.map((x) => x.symbol), ['TSLAX']);
+  assert.equal(listEquities(emarket).matched, 5, 'default $1M floor drops the tiny one');
+  assert.equal(listEquities(emarket, { sortBy: 'premium', limit: 1 }).equities[0].symbol, 'TSLAX');
+  const g = getEquity(emarket, 'TSLA');
+  assert.equal(g.wrappers, 2);
+  assert.deepEqual(g.issuers, ['xStocks (Backed)', 'bStocks']);
+  assert.equal(g.mostLiquid, 'TSLAX');
+  assert.deepEqual(g.premiumRangePercent, { min: 1.07, max: 1.87 });
+  assert.equal(getEquity(emarket, 'AAPL').found, false);
+  const s = equitySummary(emarket);
+  assert.equal(s.totals.tokens, 6);
+  assert.equal(s.byIssuer['xStocks (Backed)'].tokens, 3);
+  assert.equal(s.byKind.etf.tokens, 1);
+  assert.equal(s.topUnderlyings[0].underlying, 'TSLA');
+  assert.equal(s.premium.tokensWithQuote, 3);
+});

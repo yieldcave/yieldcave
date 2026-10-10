@@ -7,6 +7,7 @@ import { loadMarket as liveLoadMarket } from './data.js';
 import { listAssets, getAsset, marketSummary, compareYield, historySeries, marketChanges, listStables, stablecoinSummary } from './tools.js';
 import { issuerTerms, ISSUERS, DISCLAIMER_NOTE } from './issuers.js';
 import { PLANS, UPGRADE_NOTE, clampDays, stableAccess, trimIssuerTerms } from './plans.js';
+import { listEquities, getEquity, equitySummary } from './equities.js';
 
 const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 
@@ -14,7 +15,7 @@ const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, n
 //   account:    { usage(), createKey(email), checkout(), portal() } or null   (adds the account tools)
 //   plan:       a PLANS entry for the caller (hosted) or null (self-hosted: no depth limits)
 export function createServer({ loadMarket = liveLoadMarket, history = null, alerts = null, account = null, plan = null } = {}) {
-  const server = new McpServer({ name: 'yieldcave', version: '0.8.0' });
+  const server = new McpServer({ name: 'yieldcave', version: '0.9.0' });
 
   server.registerTool(
     'list_rwa_yields',
@@ -105,6 +106,49 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
       inputSchema: { minTvlUsd: z.number().nonnegative().optional().describe('Pool TVL floor (default 10,000,000)') },
     },
     async (args) => asJson(stablecoinSummary(await loadMarket(), args)),
+  );
+
+  const eq = async () => loadMarket({ withEquities: true });
+  server.registerTool(
+    'list_tokenized_equities',
+    {
+      title: 'Tokenized stocks, pre-IPO shares and ETFs',
+      description:
+        'Tokenized equities on public chains (xStocks, bStocks, Ondo Global Markets, Robinhood, Dinari, Coinbase and others): token price, market cap, 24h volume, the underlying ticker, premium or discount to the latest underlying quote where available, and chains. Filter by issuer, kind (stock, pre-ipo, etf), underlying or chain. Information only, not advice.',
+      inputSchema: {
+        issuer: z.string().optional().describe('Issuer name or part of it, e.g. "xStocks", "Ondo", "Robinhood"'),
+        kind: z.enum(['stock', 'pre-ipo', 'etf']).optional(),
+        underlying: z.string().optional().describe('Underlying ticker, e.g. "TSLA"'),
+        chain: z.string().optional().describe('Chain name as CoinGecko lists it, e.g. "solana", "arbitrum-one", "ethereum"'),
+        minMarketCapUsd: z.number().nonnegative().optional().describe('Default 1,000,000'),
+        sortBy: z.enum(['marketCap', 'volume', 'premium']).optional().describe('Default marketCap; premium sorts by absolute premium'),
+        limit: z.number().int().min(1).max(100).optional().describe('Max rows (default 20; Free plans up to 25, Pro up to 100)'),
+      },
+    },
+    async (args) => {
+      const cap = plan ? (plan.issuerTerms === 'full' ? 100 : 25) : 100;
+      const out = listEquities(await eq(), { ...args, limit: Math.min(args.limit ?? 20, cap) });
+      if (plan && (args.limit ?? 20) > cap) out.planNote = `Rows limited to ${cap} on this plan. ${UPGRADE_NOTE}`;
+      return asJson(out);
+    },
+  );
+  server.registerTool(
+    'get_tokenized_equity',
+    {
+      title: 'One stock across every tokenized wrapper',
+      description: 'All tokenized versions of one underlying stock (e.g. TSLA) across issuers: market caps, volumes, chains, the most liquid wrapper, and the premium/discount range versus the underlying quote.',
+      inputSchema: { underlying: z.string().min(1).describe('Underlying ticker, e.g. "NVDA"') },
+    },
+    async ({ underlying }) => asJson(getEquity(await eq(), underlying)),
+  );
+  server.registerTool(
+    'tokenized_equity_summary',
+    {
+      title: 'Tokenized equity market summary',
+      description: 'Totals for tokenized equities: token count, market cap and 24h volume; breakdown by issuer and by kind; top underlyings by combined market cap; how many tokens have an underlying quote and the median absolute premium.',
+      inputSchema: {},
+    },
+    async () => asJson(equitySummary(await eq())),
   );
 
   server.registerTool(

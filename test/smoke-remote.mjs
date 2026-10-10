@@ -15,7 +15,7 @@ check(health.ok && health.marketFetchedAt, `health ${health.version} market ${he
 
 const anon = await connect();
 const { tools } = await anon.listTools();
-check(tools.length === 16, `16 tools, got ${tools.length}: ${tools.map((t) => t.name).join(', ')}`);
+check(tools.length === 19, `19 tools, got ${tools.length}: ${tools.map((t) => t.name).join(', ')}`);
 const s = await call(anon, 'rwa_market_summary');
 check(s.tokenizedTreasuries?.distinctTokens > 0, `summary: ${s.tokenizedTreasuries?.distinctTokens} tokens, TVL ${s.tokenizedTreasuries?.totalTvlUsd}`);
 const h = await call(anon, 'rwa_history', { symbol: 'BUIDL', days: 7 });
@@ -24,6 +24,10 @@ const st = await call(anon, 'stablecoin_yield_summary');
 check(st.totals?.pools > 50 && st.stablecoins?.[0]?.symbol, `stablecoins: ${st.totals?.pools} pools, $${st.totals?.tvlUsd}, top ${st.stablecoins?.[0]?.symbol}`);
 const sl = await call(anon, 'list_stablecoin_yields', { symbol: 'USDC', group: 'lending', limit: 3 });
 check(sl.pools?.length === 3 && sl.pools.every((p) => p.group === 'lending'), `USDC lending venues: ${sl.pools?.map((p) => p.project + '@' + p.chain + ' ' + p.apyPercent + '%').join(', ')}`);
+const es = await call(anon, 'tokenized_equity_summary');
+check(es.totals?.tokens > 100, `equities: ${es.totals?.tokens} tokens, mcap $${es.totals?.marketCapUsd}, quotes ${es.premium?.tokensWithQuote}, top ${es.topUnderlyings?.[0]?.underlying}`);
+const ge = await call(anon, 'get_tokenized_equity', { underlying: 'TSLA' });
+check(ge.found && ge.wrappers >= 2, `TSLA: ${ge.wrappers} wrappers via ${ge.issuers?.join(', ')}, premium range ${JSON.stringify(ge.premiumRangePercent)}`);
 const t = await call(anon, 'rwa_issuer_terms', { symbol: 'USYC' });
 check(t.found && t.eligibility?.usPersons === 'excluded' && t.summaryOnly === true, 'issuer terms USYC (summary on anonymous)');
 const dg = await call(anon, 'list_stablecoin_yields', { group: 'credit' });

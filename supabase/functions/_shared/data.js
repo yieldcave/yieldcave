@@ -70,16 +70,20 @@ async function getJson(fetchImpl, url) {
 }
 
 let cache = { at: 0, market: null };
+let equitiesCache = { at: 0, equities: null };
 
-export async function loadMarket({ fetchImpl = globalThis.fetch, now = Date.now, force = false } = {}) {
-  if (!force && cache.market && now() - cache.at < CACHE_TTL_MS) return cache.market;
-  const [pools, protocols] = await Promise.all([
-    getJson(fetchImpl, POOLS_URL),
-    getJson(fetchImpl, PROTOCOLS_URL),
-  ]);
-  const market = buildMarket(pools, protocols);
-  cache = { at: now(), market };
-  return market;
+export async function loadMarket({ fetchImpl = globalThis.fetch, now = Date.now, force = false, withEquities = false } = {}) {
+  if (force || !cache.market || now() - cache.at >= CACHE_TTL_MS) {
+    const [pools, protocols] = await Promise.all([getJson(fetchImpl, POOLS_URL), getJson(fetchImpl, PROTOCOLS_URL)]);
+    cache = { at: now(), market: buildMarket(pools, protocols) };
+  }
+  if (withEquities) {
+    if (force || !equitiesCache.equities || now() - equitiesCache.at >= CACHE_TTL_MS) {
+      equitiesCache = { at: now(), equities: await loadEquities({ fetchImpl }) };
+    }
+    return { ...cache.market, equities: equitiesCache.equities };
+  }
+  return cache.market;
 }
 
 // Local snapshot store for development: one JSON file per UTC day in a directory.
@@ -139,4 +143,52 @@ export function buildStables(poolsJson, protocolsJson, { minTvlUsd = 1_000_000 }
     .filter((p) => p.stablecoin === true && p.exposure === 'single' && p.ilRisk === 'no' && !p.outlier)
     .filter((p) => (num(p.tvlUsd) ?? 0) >= minTvlUsd && category.get(p.project) !== 'RWA')
     .map((p) => normalizeStablePool(p, category.get(p.project)));
+}
+
+// ---- Tokenized equities fetch (CoinGecko + Yahoo chart quotes). Used by the hosted refresh and by the local lazy loader.
+import { CG, EQUITY_CATEGORIES, buildEquities } from './equities.js';
+
+export async function fetchEquityPages(fetchImpl = globalThis.fetch, { apiKey = null, maxPages = 4 } = {}) {
+  const headers = { accept: 'application/json', ...(apiKey ? { 'x-cg-demo-api-key': apiKey } : {}) };
+  const pagesByKind = {};
+  for (const [kind, category] of Object.entries(EQUITY_CATEGORIES)) {
+    const pages = [];
+    for (let page = 1; page <= (kind === 'stock' ? maxPages : 1); page++) {
+      const r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers });
+      if (!r.ok) break;
+      const rows = await r.json();
+      if (!Array.isArray(rows) || !rows.length) break;
+      pages.push(rows);
+      if (rows.length < 250) break;
+    }
+    pagesByKind[kind] = pages;
+  }
+  return pagesByKind;
+}
+
+export async function fetchUnderlyingQuotes(tickers, fetchImpl = globalThis.fetch, { concurrency = 5 } = {}) {
+  const quotes = {};
+  const queue = [...new Set(tickers.filter(Boolean))];
+  const worker = async () => {
+    while (queue.length) {
+      const t = queue.shift();
+      try {
+        const r = await fetchImpl(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(t)}?range=1d&interval=1d`, { headers: { 'user-agent': 'Mozilla/5.0 (yieldcave)' } });
+        if (!r.ok) continue;
+        const meta = (await r.json())?.chart?.result?.[0]?.meta;
+        if (meta?.regularMarketPrice) quotes[t] = { price: meta.regularMarketPrice, asOf: meta.regularMarketTime ? new Date(meta.regularMarketTime * 1000).toISOString() : null };
+      } catch { /* leave without a quote */ }
+    }
+  };
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  return quotes;
+}
+
+// Full equities build: pages -> parse -> quotes for the top N underlyings -> optional chain metadata.
+export async function loadEquities({ fetchImpl = globalThis.fetch, apiKey = null, quoteTop = 40, meta = {} } = {}) {
+  const pages = await fetchEquityPages(fetchImpl, { apiKey });
+  const first = buildEquities(pages);
+  const top = [...new Set(first.filter((e) => e.underlying && e.kind !== 'pre-ipo').map((e) => e.underlying))].slice(0, quoteTop);
+  const quotes = await fetchUnderlyingQuotes(top, fetchImpl);
+  return buildEquities(pages, { quotes, meta });
 }

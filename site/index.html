@@ -71,7 +71,7 @@
 
   <div class="hero">
     <h1>The tokenized asset market, readable by your agent.</h1>
-    <p class="lede">YieldCave is an MCP server that gives Claude, Cursor and any other AI agent a clean, read-only view of where dollars earn yield onchain: tokenized treasuries, and stablecoin lending and vault venues. What exists, on which chain, what it yields, how deep the liquidity is, and who may buy it.</p>
+    <p class="lede">YieldCave is an MCP server that gives Claude, Cursor and any other AI agent a clean, read-only view of tokenized finance: tokenized treasuries, stablecoin yield venues, and tokenized stocks. What exists, on which chain, what it yields or trades at, how deep the liquidity is, and who may buy it.</p>
     <div class="cta">
       <a class="btn primary" href="#install">Add to Claude in 2 minutes</a>
       <a class="btn" href="#live">See the live table</a>
@@ -108,6 +108,18 @@
     <p class="status" id="sstatus"></p>
   </section>
 
+  <section id="equities">
+    <h2>Tokenized stocks, right now</h2>
+    <p class="sub">Top tokenized equities by market cap across xStocks, bStocks, Ondo, Robinhood, Dinari, Coinbase and others. Source: CoinGecko.</p>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Token</th><th>Name</th><th class="num">Price</th><th class="num">Market cap</th><th class="num">24h volume</th></tr></thead>
+        <tbody id="erows"><tr><td colspan="5">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="status" id="estatus"></p>
+  </section>
+
   <section id="why">
     <h2>Why a read-only layer</h2>
     <p class="sub">Agents will soon shop for yield the way they already shop for flights. Something has to be the index they consult.</p>
@@ -133,10 +145,11 @@ npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
   </section>
 
   <section id="tools">
-    <h2>Sixteen tools</h2>
+    <h2>Nineteen tools</h2>
     <ul class="tools">
       <li><code>list_rwa_yields</code>, <code>get_rwa_asset</code>, <code>rwa_market_summary</code> — tokenized treasuries and other RWAs, by chain, token or in total</li>
       <li><code>list_stablecoin_yields</code>, <code>stablecoin_yield_summary</code> — where USDC, USDT, DAI and friends earn yield, with lending, vault, credit and basis venues labelled</li>
+      <li><code>list_tokenized_equities</code>, <code>get_tokenized_equity</code>, <code>tokenized_equity_summary</code> — tokenized stocks, pre-IPO shares and ETFs by issuer, with premium or discount to the underlying and chains</li>
       <li><code>compare_yield_to_tokenized_treasuries</code> — simple-interest arithmetic against the best liquid tokenized treasury</li>
       <li><code>rwa_issuer_terms</code> — who may invest, minimums, redemption, fees, legal structure, with sources and a verified date</li>
       <li><code>rwa_history</code>, <code>rwa_changes</code> — daily snapshots and what moved since N days ago, for either universe</li>
@@ -197,6 +210,15 @@ npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
   } catch (e) {
     rows.innerHTML = '<tr><td colspan="5">Could not load live data. Run <code>npm run demo</code> locally instead.</td></tr>';
     status.textContent = String(e);
+  }
+  // Tokenized equities (independent fetch, CoinGecko allows browser requests).
+  try {
+    const eq = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=tokenized-stock&order=market_cap_desc&per_page=10&page=1').then((r) => r.json());
+    document.getElementById('erows').innerHTML = eq.map((c) =>
+      `<tr><td><strong>${c.symbol.toUpperCase()}</strong></td><td>${c.name}</td><td class="num">$${c.current_price?.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td><td class="num">${usd(c.market_cap || 0)}</td><td class="num">${usd(c.total_volume || 0)}</td></tr>`).join('');
+    document.getElementById('estatus').textContent = `Top 10 by market cap · over 1,000 tokenized equities tracked · source CoinGecko`;
+  } catch (e) {
+    document.getElementById('erows').innerHTML = '<tr><td colspan="5">Could not load equities right now.</td></tr>';
   }
 })();
 </script>

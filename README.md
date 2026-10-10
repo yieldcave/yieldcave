@@ -1,6 +1,6 @@
 # YieldCave
 
-**Machine-readable onchain yield data for AI agents: tokenized treasuries and stablecoin venues.**
+**Machine-readable tokenized-finance data for AI agents: tokenized treasuries, stablecoin yield venues, and tokenized stocks.**
 
 YieldCave is an [MCP](https://modelcontextprotocol.io) server. Add it to Claude Desktop, Claude Code or Cursor and your agent can answer questions like:
 
@@ -8,6 +8,7 @@ YieldCave is an [MCP](https://modelcontextprotocol.io) server. Add it to Claude 
 - "How much more would $25k earn in the best liquid tokenized treasury than in my 0.4% savings account?"
 - "Summarize the tokenized RWA market."
 - "Where does USDC earn the most on a collateralized lending market with at least $50M behind it?"
+- "Which tokenized NVIDIA token is the most liquid, and is it trading at a premium to the stock?"
 
 It is **read-only**. It never touches a wallet, never moves money and never recommends. That is the point: an index, not a broker.
 
@@ -83,7 +84,8 @@ How the hosted version is put together, all inside the `supabase/` folder:
 ```
 supabase/functions/_shared/   the real code: data.js, tools.js, mcp.js (src/ re-exports these)
 supabase/functions/mcp/       public MCP endpoint, reads market_latest and snapshots from Postgres
-supabase/functions/refresh/   fetches DefiLlama, writes market_latest + today's snapshot, fires alerts; needs REFRESH_SECRET header
+supabase/functions/refresh/   fetches DefiLlama + CoinGecko + quotes, writes market_latest + today's snapshot, fires alerts; needs REFRESH_SECRET header
+supabase/functions/enrich/    fills chain metadata for tokenized equities, 15 per run, every 10 minutes
 supabase/functions/stripe-webhook/  upgrades/downgrades keys on Stripe events
 supabase/functions/site/      serves the landing page (pages.js is generated from site/)
 supabase/migrations/          tables (market, snapshots, alerts, api_keys, usage_daily), RLS on, hourly pg_cron job, public site bucket
@@ -112,6 +114,9 @@ Secrets (database password, refresh secret) live in `.env.local`, which git igno
 | `get_rwa_asset` | One symbol (e.g. `BUIDL`) across every chain, with total TVL and a curated description |
 | `list_stablecoin_yields` | Single-asset stablecoin pools (USDC, USDT, DAI, USDe, ...) on lending, vault, credit and basis venues, each labelled by group, with base vs reward APY, 30-day mean and TVL. $10M floor by default |
 | `stablecoin_yield_summary` | Per stablecoin: venues, TVL, median APY, best venue overall and best collateralized-lending venue; totals by group; tokenized-treasury median for comparison |
+| `list_tokenized_equities` | Tokenized stocks, pre-IPO shares and ETFs (xStocks, bStocks, Ondo, Robinhood, Dinari, Coinbase, ...): price, market cap, volume, underlying ticker, premium/discount to the underlying quote, chains. Source: CoinGecko, quotes via Yahoo chart data |
+| `get_tokenized_equity` | One underlying (e.g. TSLA) across every wrapper: issuers, chains, most liquid token, premium range |
+| `tokenized_equity_summary` | Totals, by issuer and kind, top underlyings, premium statistics |
 | `rwa_market_summary` | Totals: distinct treasury tokens, TVL, median APY, top five, plus other RWA totals |
 | `compare_yield_to_tokenized_treasuries` | Simple-interest arithmetic: your current APY vs the best liquid tokenized treasury over a horizon, with assumptions spelled out |
 | `rwa_issuer_terms` | Hand-curated terms for BUIDL, USYC, USDY, OUSG, USTB, TBILL, STBT, BENJI: structure, eligibility (US persons?), minimums, redemption, fees, sources, date verified |
@@ -149,7 +154,8 @@ Every response carries a disclaimer and the time the data was fetched. Issuer te
 ## 5. Project layout
 
 ```
-src/data.js     re-export of supabase/functions/_shared/data.js (fetch, normalize, cache, local snapshots)
+src/data.js     re-export of supabase/functions/_shared/data.js (fetch, normalize, cache, local snapshots, equities)
+src/equities.js re-export of _shared/equities.js: tokenized stock parsing and tools
 src/tools.js    re-export of _shared/tools.js: pure functions behind each tool (unit-tested)
 src/mcp.js      re-export of _shared/mcp.js: declares the five tools
 src/snapshot.js saves today's market locally (npm run snapshot)

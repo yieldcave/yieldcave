@@ -20,7 +20,7 @@ const cmp = await client.callTool({ name: 'compare_yield_to_tokenized_treasuries
 const c = JSON.parse(cmp.content[0].text);
 console.log('best treasury:', c.bestTokenizedTreasury?.symbol, c.bestTokenizedTreasury?.apyPercent, 'diff $', c.projectedInterestUsd?.difference);
 
-if (tools.length !== 9 || !s.tokenizedTreasuries.distinctTokens || !c.bestTokenizedTreasury) {
+if (tools.length !== 12 || !s.tokenizedTreasuries.distinctTokens || !c.bestTokenizedTreasury) {
   console.error('SMOKE FAIL');
   process.exit(1);
 }

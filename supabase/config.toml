@@ -418,3 +418,6 @@ verify_jwt = false
 
 [functions.site]
 verify_jwt = false
+
+[functions.enrich]
+verify_jwt = false
