@@ -406,7 +406,7 @@ test('createServer applies the plan to list_stablecoin_yields, rwa_history and r
   const d = await call(free, 'list_stablecoin_yields', { group: 'credit' });
   assert.equal(d.deniedGroup, 'credit');
   const h = await call(free, 'rwa_history', { symbol: 'USDC', universe: 'stablecoin', days: 30 });
-  assert.equal(h.days, 1, 'only snapshots within the 7-day window (one here)');
+  assert.equal(h.days, 3, 'the store returned the three snapshots inside the 7-day cap, none beyond it');
   assert.match(h.planNote, /7 days/);
   const pro = mk(PLANS.pro);
   const lp = await call(pro, 'list_stablecoin_yields', { minTvlUsd: 1 });
