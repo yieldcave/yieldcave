@@ -79,7 +79,7 @@ export function listEquities(market, { issuer, kind, underlying, chain, minMarke
   const val = (e) => (e[key] == null ? -1 : Math.abs(e[key]));
   rows = [...rows].sort((a, b) => val(b) - val(a));
   return {
-    fetchedAt: market.fetchedAt, source: 'CoinGecko (tokenized stock, pre-IPO and ETF categories); underlying quotes via Yahoo Finance chart data, delayed',
+    fetchedAt: market.fetchedAt, source: 'Data provided by CoinGecko (https://www.coingecko.com): tokenized stock, pre-IPO and ETF categories; underlying quotes via Yahoo Finance chart data, delayed',
     matched: rows.length, equities: rows.slice(0, limit),
     note: 'premiumPercent compares the token price to the latest underlying quote; both move, quotes are delayed, and tokens trade when the stock market is closed, so a premium can simply mean after-hours news. Chains are filled in gradually from CoinGecko metadata.',
     disclaimer: DISCLAIMER,

@@ -474,3 +474,27 @@ test('listEquities, getEquity and equitySummary', () => {
   assert.equal(s.topUnderlyings[0].underlying, 'TSLA');
   assert.equal(s.premium.tokensWithQuote, 3);
 });
+
+import { READ, TOOL_ANNOTATIONS } from '../src/mcp.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+
+test('every tool declares all four annotation hints; only account and alert writes are not read-only', async () => {
+  const stub = {};
+  const server = createServer({ loadMarket: async () => ({}), history: { load: async () => [] }, alerts: stub, account: stub });
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: 'annotations-test', version: '0' });
+  await Promise.all([server.connect(a), client.connect(b)]);
+  const { tools } = await client.listTools();
+  assert.equal(tools.length, 19);
+  for (const t of tools) {
+    for (const hint of ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint']) {
+      assert.equal(typeof t.annotations?.[hint], 'boolean', `${t.name} is missing ${hint}`);
+    }
+    const isWrite = t.name in TOOL_ANNOTATIONS;
+    assert.equal(t.annotations.readOnlyHint, !isWrite, `${t.name} readOnlyHint`);
+    if (!isWrite) assert.deepEqual(t.annotations, READ);
+  }
+  assert.equal(tools.find((t) => t.name === 'delete_alert').annotations.destructiveHint, true);
+  await client.close();
+});

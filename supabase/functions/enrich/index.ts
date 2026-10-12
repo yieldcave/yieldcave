@@ -2,7 +2,7 @@
 // Called every 10 minutes by pg_cron; guarded by the REFRESH_SECRET header.
 import { createClient } from '@supabase/supabase-js';
 
-const STALE_DAYS = 7;
+const STALE_DAYS = 30;   // chain metadata rarely changes; keeps enrich well inside the 10k/month Demo allowance
 
 Deno.serve(async (req) => {
   const secret = Deno.env.get('REFRESH_SECRET');

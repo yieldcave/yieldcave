@@ -11,6 +11,19 @@ import { listEquities, getEquity, equitySummary } from './equities.js';
 
 const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
 
+// Tool annotations (MCP behaviour hints). All four are set explicitly on every tool:
+// directories (e.g. OpenAI's) and clients rely on them to decide what needs user confirmation.
+export const READ = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
+const WRITE = (extra) => ({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false, ...extra });
+export const TOOL_ANNOTATIONS = {
+  create_alert: WRITE({ openWorldHint: true }),          // stores a rule that later POSTs to the caller's webhook
+  delete_alert: WRITE({ destructiveHint: true, idempotentHint: true }),
+  create_api_key: WRITE(),                               // one key per email; a repeat call does not mint another
+  upgrade: WRITE({ openWorldHint: true }),               // opens a Stripe Checkout session (no charge until the user pays)
+  manage_subscription: WRITE({ openWorldHint: true }),   // opens a Stripe Billing Portal session
+};
+export const annotationsFor = (name) => TOOL_ANNOTATIONS[name] ?? READ;
+
 //   alerts:     { create(row) => row, list() => rows, remove(id) => boolean } or null   (adds the alert tools)
 //   account:    { usage(), createKey(email), checkout(), portal() } or null   (adds the account tools)
 //   plan:       a PLANS entry for the caller (hosted) or null (self-hosted: no depth limits)
@@ -19,7 +32,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'list_rwa_yields',
-    {
+    { annotations: annotationsFor('list_rwa_yields'),
       title: 'List tokenized real-world asset yields',
       description:
         'Lists tokenized real-world asset deployments (tokenized US treasuries, credit, funds) with current APY and TVL, from public DefiLlama data. Filter by chain or kind. Information only, not advice.',
@@ -36,7 +49,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'get_rwa_asset',
-    {
+    { annotations: annotationsFor('get_rwa_asset'),
       title: 'Get one tokenized asset across chains',
       description: 'Returns every deployment of one tokenized asset symbol (e.g. BUIDL, USDY, OUSG) across chains, with total TVL and curated description.',
       inputSchema: { symbol: z.string().min(1).describe('Token symbol, e.g. "BUIDL"') },
@@ -46,7 +59,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'rwa_market_summary',
-    {
+    { annotations: annotationsFor('rwa_market_summary'),
       title: 'Tokenized RWA market summary',
       description: 'Totals for the tokenized treasury market: distinct tokens, total TVL, median APY, top tokens by TVL, plus totals for other tokenized real-world assets.',
       inputSchema: {},
@@ -56,7 +69,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'compare_yield_to_tokenized_treasuries',
-    {
+    { annotations: annotationsFor('compare_yield_to_tokenized_treasuries'),
       title: 'Compare a yield to tokenized treasuries',
       description:
         'Given an APY the user currently earns (e.g. a bank savings rate), computes the simple-interest difference versus the highest-yielding liquid tokenized treasury over a horizon. Returns arithmetic and assumptions only; it does not recommend.',
@@ -72,7 +85,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'list_stablecoin_yields',
-    {
+    { annotations: annotationsFor('list_stablecoin_yields'),
       title: 'Stablecoin yields by venue',
       description:
         'Where USDC, USDT, DAI, USDe and other stablecoins earn yield right now: single-asset pools on lending markets and vaults (credit and basis venues on Pro) (DefiLlama data, excludes tokenized treasuries, which have their own tools). Each row carries its protocol category group (lending, vault, credit, basis), base vs reward APY, 30-day mean APY and TVL. Default: pools with at least $10M TVL, highest APY first. Information only, not advice.',
@@ -99,7 +112,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'stablecoin_yield_summary',
-    {
+    { annotations: annotationsFor('stablecoin_yield_summary'),
       title: 'Stablecoin yield market summary',
       description:
         'Per stablecoin: venues, total TVL, median APY, best venue overall and best collateralized-lending venue; totals by category group; and the median tokenized treasury APY for comparison. Pools with at least $10M TVL by default.',
@@ -111,7 +124,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   const eq = async () => loadMarket({ withEquities: true });
   server.registerTool(
     'list_tokenized_equities',
-    {
+    { annotations: annotationsFor('list_tokenized_equities'),
       title: 'Tokenized stocks, pre-IPO shares and ETFs',
       description:
         'Tokenized equities on public chains (xStocks, bStocks, Ondo Global Markets, Robinhood, Dinari, Coinbase and others): token price, market cap, 24h volume, the underlying ticker, premium or discount to the latest underlying quote where available, and chains. Filter by issuer, kind (stock, pre-ipo, etf), underlying or chain. Information only, not advice.',
@@ -134,7 +147,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   );
   server.registerTool(
     'get_tokenized_equity',
-    {
+    { annotations: annotationsFor('get_tokenized_equity'),
       title: 'One stock across every tokenized wrapper',
       description: 'All tokenized versions of one underlying stock (e.g. TSLA) across issuers: market caps, volumes, chains, the most liquid wrapper, and the premium/discount range versus the underlying quote.',
       inputSchema: { underlying: z.string().min(1).describe('Underlying ticker, e.g. "NVDA"') },
@@ -143,7 +156,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   );
   server.registerTool(
     'tokenized_equity_summary',
-    {
+    { annotations: annotationsFor('tokenized_equity_summary'),
       title: 'Tokenized equity market summary',
       description: 'Totals for tokenized equities: token count, market cap and 24h volume; breakdown by issuer and by kind; top underlyings by combined market cap; how many tokens have an underlying quote and the median absolute premium.',
       inputSchema: {},
@@ -153,7 +166,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
 
   server.registerTool(
     'rwa_issuer_terms',
-    {
+    { annotations: annotationsFor('rwa_issuer_terms'),
       title: 'Issuer terms for a tokenized treasury',
       description:
         `Hand-curated terms for a tokenized treasury token: who may invest (US persons?), minimum, structure (summary on Free; Pro adds what backs it, domicile, redemption method and timing, fees, yield mechanics and source URLs). Covers ${Object.keys(ISSUERS).join(', ')}. Null means not stated by the source.`,
@@ -165,7 +178,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   if (history) {
     server.registerTool(
       'rwa_history',
-      {
+      { annotations: annotationsFor('rwa_history'),
         title: 'Daily history for one tokenized asset',
         description:
           'Daily snapshots of total TVL and TVL-weighted APY for one symbol, optionally on one chain, over the last N days (default 30; Free and anonymous plans see 7, Pro the full history). universe "rwa" (tokenized assets, default) or "stablecoin" (stablecoin pools). Includes the change from first to last day.',
@@ -188,7 +201,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   if (history) {
     server.registerTool(
       'rwa_changes',
-      {
+      { annotations: annotationsFor('rwa_changes'),
         title: 'What changed in the tokenized RWA market',
         description:
           'Compares the latest market with the snapshot from N days ago (default 1): APY and TVL change per deployment, biggest movers first, plus new and vanished deployments. universe "rwa" (default) or "stablecoin".',
@@ -215,7 +228,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   if (alerts) {
     server.registerTool(
       'create_alert',
-      {
+      { annotations: annotationsFor('create_alert'),
         title: 'Create a webhook alert',
         description:
           'Creates a rule that is checked every hour after the data refresh. When any matching deployment crosses the threshold, YieldCave POSTs a JSON payload to your HTTPS webhook (Slack, Discord, Zapier, your own server). Fires at most once per 24 hours per rule. universe "rwa" (tokenized treasuries, default) or "stablecoin" (stablecoin pools with at least $10M TVL; omit symbol for all major stablecoins). Returns the alert id; keep it to delete the alert later.',
@@ -234,12 +247,12 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
     );
     server.registerTool(
       'list_alerts',
-      { title: 'List alerts', description: 'Lists active alert rules (webhook hosts only, never full URLs).', inputSchema: {} },
+      { annotations: annotationsFor('list_alerts'), title: 'List alerts', description: 'Lists active alert rules (webhook hosts only, never full URLs).', inputSchema: {} },
       async () => asJson({ alerts: await alerts.list() }),
     );
     server.registerTool(
       'delete_alert',
-      { title: 'Delete an alert', description: 'Deletes an alert by id.', inputSchema: { id: z.string().uuid() } },
+      { annotations: annotationsFor('delete_alert'), title: 'Delete an alert', description: 'Deletes an alert by id.', inputSchema: { id: z.string().uuid() } },
       async ({ id }) => asJson({ id, deleted: await alerts.remove(id) }),
     );
   }
@@ -247,7 +260,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
   if (account) {
     server.registerTool(
       'create_api_key',
-      {
+      { annotations: annotationsFor('create_api_key'),
         title: 'Create a free API key',
         description:
           `Creates a free YieldCave API key (${PLANS.free.callsPerDay} calls/day, ${PLANS.free.alerts} alerts, 7 days of history) tied to an email address. The key is shown once. Send it on every request as an x-api-key header or Authorization: Bearer. One key per email.`,
@@ -257,17 +270,17 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
     );
     server.registerTool(
       'my_usage',
-      { title: 'My plan and usage', description: 'Shows the caller\'s plan, calls used today, remaining allowance, alert allowance, depth limits, and what each plan includes.', inputSchema: {} },
+      { annotations: annotationsFor('my_usage'), title: 'My plan and usage', description: 'Shows the caller\'s plan, calls used today, remaining allowance, alert allowance, depth limits, and what each plan includes.', inputSchema: {} },
       async () => asJson({ ...(await account.usage()), plans: PLANS }),
     );
     server.registerTool(
       'upgrade',
-      { title: 'Upgrade to Pro', description: `Returns a checkout link for the Pro plan (${PLANS.pro.price}: full history and changes, all stablecoin venues, full issuer terms, ${PLANS.pro.alerts} alerts, ${PLANS.pro.callsPerDay} calls/day). Needs an API key.`, inputSchema: {} },
+      { annotations: annotationsFor('upgrade'), title: 'Upgrade to Pro', description: `Returns a checkout link for the Pro plan (${PLANS.pro.price}: full history and changes, all stablecoin venues, full issuer terms, ${PLANS.pro.alerts} alerts, ${PLANS.pro.callsPerDay} calls/day). Needs an API key.`, inputSchema: {} },
       async () => asJson(await account.checkout()),
     );
     server.registerTool(
       'manage_subscription',
-      { title: 'Manage subscription', description: 'Returns a Stripe Billing Portal link to update payment details, see invoices, or cancel the Pro subscription. Needs an API key with a subscription.', inputSchema: {} },
+      { annotations: annotationsFor('manage_subscription'), title: 'Manage subscription', description: 'Returns a Stripe Billing Portal link to update payment details, see invoices, or cancel the Pro subscription. Needs an API key with a subscription.', inputSchema: {} },
       async () => asJson(await account.portal()),
     );
   }
