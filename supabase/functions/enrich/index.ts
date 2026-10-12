@@ -2,7 +2,6 @@
 // Called every 10 minutes by pg_cron; guarded by the REFRESH_SECRET header.
 import { createClient } from '@supabase/supabase-js';
 
-const BATCH = 6;   // keyless CoinGecko tolerates only a handful of calls per minute from cloud IPs; raise once COINGECKO_API_KEY is set
 const STALE_DAYS = 7;
 
 Deno.serve(async (req) => {
@@ -14,9 +13,10 @@ Deno.serve(async (req) => {
   const { data: metaRows } = await db.from('equity_meta').select('coingecko_id,updated_at');
   const updated = new Map((metaRows ?? []).map((r) => [r.coingecko_id, new Date(r.updated_at).getTime()]));
   const cutoff = Date.now() - STALE_DAYS * 86400_000;
-  const todo = equities.filter((e) => !updated.has(e.coingeckoId) || updated.get(e.coingeckoId)! < cutoff).slice(0, BATCH);
   const headers: Record<string, string> = { accept: 'application/json' };
   const key = Deno.env.get('COINGECKO_API_KEY'); if (key) headers['x-cg-demo-api-key'] = key;
+  const BATCH = key ? 25 : 6;   // Demo plan allows ~30 calls/min; keyless cloud access tolerates only a few
+  const todo = equities.filter((e) => !updated.has(e.coingeckoId) || updated.get(e.coingeckoId)! < cutoff).slice(0, BATCH);
   let done = 0; let rateLimited = false;
   for (const e of todo) {
     const r = await fetch(`https://api.coingecko.com/api/v3/coins/${e.coingeckoId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`, { headers });
