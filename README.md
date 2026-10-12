@@ -127,11 +127,11 @@ Secrets (database password, refresh secret) live in `.env.local`, which git igno
 
 ## 4b. Plans, keys and metering (hosted)
 
-| Plan | Price | Calls/day | Alerts | History | Changes | Stablecoin venues | Issuer terms |
-|---|---|---|---|---|---|---|---|
-| Anonymous | $0 | 1,000 per IP | 0 | 7 days | 1 day back | lending and vault, 10 rows | summary |
-| Free key | $0 | 1,000 | 3 | 7 days | 1 day back | lending and vault, 10 rows | summary |
-| Pro | $49/month | 5,000 | 100 | full | any range | all groups, 100 rows | full record with sources |
+| Plan | Price | Calls/day | Alerts | History | Changes | Stablecoin venues | Issuer terms | Tokenized equities |
+|---|---|---|---|---|---|---|---|---|
+| Anonymous | $0 | 100 per IP | 0 | 7 days | 1 day back | lending and vault, 10 rows | summary | 10 rows, no premiums |
+| Free key | $0 | 300 | 3 | 7 days | 1 day back | lending and vault, 10 rows | summary | 10 rows, no premiums |
+| Pro | $49/month | 5,000 | 100 | full | any range | all groups, 100 rows | full record with sources | 100 rows, premiums and premium sort |
 
 Live data is free; depth is paid. Get a key by asking your agent to call `create_api_key` with your email; send it as an `x-api-key` header (or `Authorization: Bearer`), or as `?key=yc_...` on the connector URL for claude.ai. Pro is bought with the `upgrade` tool (Stripe checkout) and managed with `manage_subscription`. Self-hosted servers have no plan limits.
 

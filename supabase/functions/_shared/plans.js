@@ -1,25 +1,28 @@
 // Plans. Live data is free; depth is paid. Pure functions; the hosted endpoint enforces them, self-hosted servers ignore them.
 export const PLANS = {
   anonymous: {
-    name: 'Anonymous', price: '$0', callsPerDay: 1000, alerts: 0,
+    name: 'Anonymous', price: '$0', callsPerDay: 100, alerts: 0,
     historyDays: 7, changesDays: 1, stableGroups: ['lending', 'vault'], stableRows: 10, issuerTerms: 'summary',
+    equityRows: 10, equityPremium: false, equityTopUnderlyings: 5,
     how: 'No key. Limit is per IP address per UTC day.',
   },
   free: {
-    name: 'Free', price: '$0', callsPerDay: 1000, alerts: 3,
+    name: 'Free', price: '$0', callsPerDay: 300, alerts: 3,
     historyDays: 7, changesDays: 1, stableGroups: ['lending', 'vault'], stableRows: 10, issuerTerms: 'summary',
+    equityRows: 10, equityPremium: false, equityTopUnderlyings: 5,
     how: 'Already have a key? Send it as an x-api-key header (or Authorization: Bearer). On claude.ai, which cannot send headers, the user (not the assistant) must edit the connector in claude.ai settings so its URL ends with ?key=<your key>. No key yet? Call create_api_key with your email; it is free and shown once.',
   },
   pro: {
     name: 'Pro', price: '$49/month', callsPerDay: 5000, alerts: 100,
     historyDays: 365, changesDays: 365, stableGroups: ['lending', 'vault', 'credit', 'basis', 'other'], stableRows: 100, issuerTerms: 'full',
+    equityRows: 100, equityPremium: true, equityTopUnderlyings: 10,
     how: 'Call upgrade with your key to get a checkout link.',
   },
 };
 
 export const PLAN_SUMMARY = {
-  free: 'Live market and stablecoin tools, 7 days of history, 1-day changes, lending and vault venues, issuer-terms summaries. 1,000 calls/day; 3 alerts with a free key.',
-  pro: 'Everything in Free plus full history and changes, all stablecoin venues (credit and basis included, up to 100 rows), full issuer-terms records with sources, 100 alerts, 5,000 calls/day. $49/month.',
+  free: 'Live market and stablecoin tools, 7 days of history, 1-day changes, lending and vault venues, issuer-terms summaries, the top 10 tokenized equities per query without premium/discount figures. 100 calls/day per IP without a key, 300 with a free key (plus 3 alerts).',
+  pro: 'Everything in Free plus full history and changes, all stablecoin venues (credit and basis included, up to 100 rows), full issuer-terms records with sources, tokenized equities in depth (up to 100 rows, premium/discount to the underlying stock, top 10 underlyings, premium screening), 100 alerts, 5,000 calls/day. $49/month.',
 };
 
 export const UPGRADE_NOTE = `Pro includes this. ${PLAN_SUMMARY.pro} Call upgrade for a checkout link.`;
@@ -75,4 +78,29 @@ export function trimIssuerTerms(plan, record) {
     summaryOnly: true,
     note: `Summary record. Full terms (underlying, domicile, redemption method and timing, fees, yield mechanics, custodian, source URLs) are on Pro. ${UPGRADE_NOTE}`,
   };
+}
+
+// Tokenized equities: Free and anonymous callers get the top rows without premium/discount figures; Pro gets depth and premiums.
+const PREMIUM_FIELDS = ['underlyingPriceUsd', 'premiumPercent', 'underlyingAsOf'];
+const stripPremium = (row) => { const out = { ...row }; for (const f of PREMIUM_FIELDS) delete out[f]; return out; };
+export function equityLimit(plan, requested = 20) {
+  if (!plan) return { limit: requested, limited: false };
+  return requested > plan.equityRows ? { limit: plan.equityRows, limited: true } : { limit: requested, limited: false };
+}
+export function trimEquities(plan, kind, out) {
+  if (!plan || plan.equityPremium || !out || out.found === false) return out;
+  const note = `Premium/discount to the underlying stock${kind === 'summary' ? ', the full top-10 underlyings list' : ''} and up to ${PLANS.pro.equityRows} rows are on Pro. ${UPGRADE_NOTE}`;
+  if (kind === 'list') {
+    const { note: _drop, ...rest } = out;
+    return { ...rest, equities: (out.equities ?? []).map(stripPremium), planNote: note };
+  }
+  if (kind === 'get') {
+    const { premiumRangePercent, underlyingPriceUsd, ...rest } = out;
+    return { ...rest, tokens: (out.tokens ?? []).map(stripPremium), planNote: note };
+  }
+  if (kind === 'summary') {
+    const { premium, ...rest } = out;
+    return { ...rest, topUnderlyings: (out.topUnderlyings ?? []).slice(0, plan.equityTopUnderlyings), planNote: note };
+  }
+  return out;
 }

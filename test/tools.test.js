@@ -198,9 +198,11 @@ test('issuer records are complete and consistent', () => {
 import { PLANS, allowance, alertAllowance, limitMessage, KEY_TOOLS } from '../src/plans.js';
 
 test('plans and allowances', () => {
-  assert.equal(allowance('anonymous', 999).allowed, true);
-  assert.equal(allowance('anonymous', 1000).allowed, false);
-  assert.equal(allowance('free', 999).remaining, 1);
+  assert.equal(PLANS.anonymous.callsPerDay, 100);
+  assert.equal(PLANS.free.callsPerDay, 300);
+  assert.equal(allowance('anonymous', 99).allowed, true);
+  assert.equal(allowance('anonymous', 100).allowed, false);
+  assert.equal(allowance('free', 299).remaining, 1);
   assert.equal(allowance('pro', 0).limit, PLANS.pro.callsPerDay);
   assert.equal(allowance('bogus', 0).limit, PLANS.anonymous.callsPerDay, 'unknown tier falls back to anonymous');
   assert.equal(alertAllowance('anonymous', 0).allowed, false);
@@ -497,4 +499,38 @@ test('every tool declares all four annotation hints; only account and alert writ
   }
   assert.equal(tools.find((t) => t.name === 'delete_alert').annotations.destructiveHint, true);
   await client.close();
+});
+
+test('tokenized equities: Free gets 10 rows and no premium figures; Pro gets depth and premiums', async () => {
+  const mk = (i) => ({ symbol: `T${i}X`, name: `T${i} xStock`, coingeckoId: `t${i}`, issuer: 'xStocks (Backed)', kind: 'stock', underlying: `T${i}`,
+    priceUsd: 101, marketCapUsd: 1e9 - i, volume24hUsd: 1e6, change24hPercent: 0, underlyingPriceUsd: 100, premiumPercent: 1, underlyingAsOf: '2026-10-13T00:00:00Z', chains: ['solana'] });
+  const em = { fetchedAt: '2026-10-13T00:00:00Z', equities: Array.from({ length: 30 }, (_, i) => mk(i)) };
+  const call = async (plan, name, args = {}) => {
+    const server = createServer({ loadMarket: async () => em, plan });
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: 'equity-gating', version: '0' });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    const r = await client.callTool({ name, arguments: args });
+    await client.close();
+    return JSON.parse(r.content[0].text);
+  };
+  const freeList = await call(PLANS.free, 'list_tokenized_equities', { limit: 50 });
+  assert.equal(freeList.equities.length, 10);
+  assert.ok(freeList.equities.every((e) => !('premiumPercent' in e) && !('underlyingPriceUsd' in e)));
+  assert.match(freeList.planNote, /Pro/);
+  const proList = await call(PLANS.pro, 'list_tokenized_equities', { limit: 50 });
+  assert.equal(proList.equities.length, 30);
+  assert.equal(proList.equities[0].premiumPercent, 1);
+  const freeSort = await call(PLANS.anonymous, 'list_tokenized_equities', { sortBy: 'premium' });
+  assert.equal(freeSort.deniedSort, 'premium');
+  const freeGet = await call(PLANS.free, 'get_tokenized_equity', { underlying: 'T1' });
+  assert.ok(freeGet.found && !('premiumRangePercent' in freeGet) && !('premiumPercent' in freeGet.tokens[0]));
+  const proGet = await call(PLANS.pro, 'get_tokenized_equity', { underlying: 'T1' });
+  assert.deepEqual(proGet.premiumRangePercent, { min: 1, max: 1 });
+  const freeSum = await call(PLANS.free, 'tokenized_equity_summary');
+  assert.ok(!('premium' in freeSum) && freeSum.topUnderlyings.length === 5 && freeSum.totals.tokens === 30);
+  const proSum = await call(PLANS.pro, 'tokenized_equity_summary');
+  assert.ok(proSum.premium && proSum.topUnderlyings.length === 10);
+  const selfHosted = await call(null, 'list_tokenized_equities', { limit: 50 });
+  assert.equal(selfHosted.equities.length, 30);
 });

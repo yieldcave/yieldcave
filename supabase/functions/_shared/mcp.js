@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { loadMarket as liveLoadMarket } from './data.js';
 import { listAssets, getAsset, marketSummary, compareYield, historySeries, marketChanges, listStables, stablecoinSummary } from './tools.js';
 import { issuerTerms, ISSUERS, DISCLAIMER_NOTE } from './issuers.js';
-import { PLANS, UPGRADE_NOTE, clampDays, stableAccess, trimIssuerTerms } from './plans.js';
+import { PLANS, UPGRADE_NOTE, clampDays, stableAccess, trimIssuerTerms, equityLimit, trimEquities } from './plans.js';
 import { listEquities, getEquity, equitySummary } from './equities.js';
 
 const asJson = (obj) => ({ content: [{ type: 'text', text: JSON.stringify(obj, null, 2) }] });
@@ -127,7 +127,7 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
     { annotations: annotationsFor('list_tokenized_equities'),
       title: 'Tokenized stocks, pre-IPO shares and ETFs',
       description:
-        'Tokenized equities on public chains (xStocks, bStocks, Ondo Global Markets, Robinhood, Dinari, Coinbase and others): token price, market cap, 24h volume, the underlying ticker, premium or discount to the latest underlying quote where available, and chains. Filter by issuer, kind (stock, pre-ipo, etf), underlying or chain. Information only, not advice.',
+        'Tokenized equities on public chains (xStocks, bStocks, Ondo Global Markets, Robinhood, Dinari, Coinbase and others): token price, market cap, 24h volume, the underlying ticker, chains, and (on Pro) premium or discount to the latest underlying quote. Filter by issuer, kind (stock, pre-ipo, etf), underlying or chain. Information only, not advice.',
       inputSchema: {
         issuer: z.string().optional().describe('Issuer name or part of it, e.g. "xStocks", "Ondo", "Robinhood"'),
         kind: z.enum(['stock', 'pre-ipo', 'etf']).optional(),
@@ -135,13 +135,16 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
         chain: z.string().optional().describe('Chain name as CoinGecko lists it, e.g. "solana", "arbitrum-one", "ethereum"'),
         minMarketCapUsd: z.number().nonnegative().optional().describe('Default 1,000,000'),
         sortBy: z.enum(['marketCap', 'volume', 'premium']).optional().describe('Default marketCap; premium sorts by absolute premium'),
-        limit: z.number().int().min(1).max(100).optional().describe('Max rows (default 20; Free plans up to 25, Pro up to 100)'),
+        limit: z.number().int().min(1).max(100).optional().describe('Max rows (default 20; Free and anonymous up to 10, Pro up to 100)'),
       },
     },
     async (args) => {
-      const cap = plan ? (plan.issuerTerms === 'full' ? 100 : 25) : 100;
-      const out = listEquities(await eq(), { ...args, limit: Math.min(args.limit ?? 20, cap) });
-      if (plan && (args.limit ?? 20) > cap) out.planNote = `Rows limited to ${cap} on this plan. ${UPGRADE_NOTE}`;
+      if (args.sortBy === 'premium' && plan && !plan.equityPremium) {
+        return asJson({ matched: 0, equities: [], deniedSort: 'premium', note: `Sorting and screening by premium/discount to the underlying stock is on Pro. ${UPGRADE_NOTE}` });
+      }
+      const lim = equityLimit(plan, args.limit ?? 20);
+      const out = trimEquities(plan, 'list', listEquities(await eq(), { ...args, limit: lim.limit }));
+      if (lim.limited) out.planNote = `Rows limited to ${lim.limit} on this plan. ${out.planNote ?? UPGRADE_NOTE}`;
       return asJson(out);
     },
   );
@@ -149,19 +152,19 @@ export function createServer({ loadMarket = liveLoadMarket, history = null, aler
     'get_tokenized_equity',
     { annotations: annotationsFor('get_tokenized_equity'),
       title: 'One stock across every tokenized wrapper',
-      description: 'All tokenized versions of one underlying stock (e.g. TSLA) across issuers: market caps, volumes, chains, the most liquid wrapper, and the premium/discount range versus the underlying quote.',
+      description: 'All tokenized versions of one underlying stock (e.g. TSLA) across issuers: market caps, volumes, chains, the most liquid wrapper, and (on Pro) the premium/discount range versus the underlying quote.',
       inputSchema: { underlying: z.string().min(1).describe('Underlying ticker, e.g. "NVDA"') },
     },
-    async ({ underlying }) => asJson(getEquity(await eq(), underlying)),
+    async ({ underlying }) => asJson(trimEquities(plan, 'get', getEquity(await eq(), underlying))),
   );
   server.registerTool(
     'tokenized_equity_summary',
     { annotations: annotationsFor('tokenized_equity_summary'),
       title: 'Tokenized equity market summary',
-      description: 'Totals for tokenized equities: token count, market cap and 24h volume; breakdown by issuer and by kind; top underlyings by combined market cap; how many tokens have an underlying quote and the median absolute premium.',
+      description: 'Totals for tokenized equities: token count, market cap and 24h volume; breakdown by issuer and by kind; top underlyings by combined market cap (top 5 on Free, 10 on Pro); on Pro, how many tokens have an underlying quote and the median absolute premium.',
       inputSchema: {},
     },
-    async () => asJson(equitySummary(await eq())),
+    async () => asJson(trimEquities(plan, 'summary', equitySummary(await eq()))),
   );
 
   server.registerTool(

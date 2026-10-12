@@ -89,7 +89,7 @@ function accountFor(caller: Caller) {
     async usage() {
       const [calls, alerts] = await Promise.all([callsToday(caller.subject), activeAlerts(caller.keyId)]);
       const p = PLANS[caller.tier];
-      return { plan: p.name, email: caller.email, calls: allowance(caller.tier, calls), alerts: alertAllowance(caller.tier, alerts), depth: { historyDays: p.historyDays, changesDays: p.changesDays, stableGroups: p.stableGroups, stableRows: p.stableRows, issuerTerms: p.issuerTerms }, resetsAt: nextUtcMidnight() };
+      return { plan: p.name, email: caller.email, calls: allowance(caller.tier, calls), alerts: alertAllowance(caller.tier, alerts), depth: { historyDays: p.historyDays, changesDays: p.changesDays, stableGroups: p.stableGroups, stableRows: p.stableRows, issuerTerms: p.issuerTerms, equityRows: p.equityRows, equityPremium: p.equityPremium }, resetsAt: nextUtcMidnight() };
     },
     async createKey(email: string) {
       const existing = await db.from('api_keys').select('id,prefix,tier').eq('email', email.toLowerCase()).maybeSingle();

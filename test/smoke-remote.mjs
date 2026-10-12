@@ -44,7 +44,7 @@ await anon.close();
 
 const keyed = await connect({ 'x-api-key': k.apiKey });
 const u = await call(keyed, 'my_usage');
-check(u.plan === 'Free' && u.calls.limit === 1000, `my_usage: plan ${u.plan}, ${u.calls.used}/${u.calls.limit} used`);
+check(u.plan === 'Free' && u.calls.limit === 300, `my_usage: plan ${u.plan}, ${u.calls.used}/${u.calls.limit} used`);
 const a = await call(keyed, 'create_alert', { metric: 'apy', operator: 'above', threshold: 1, symbol: 'USDY', webhookUrl: 'https://httpbin.org/post', label: 'smoke' });
 check(a.id && a.alertsLimit === 3, `alert created ${a.id} (${a.alertsUsed}/${a.alertsLimit})`);
 const l = await call(keyed, 'list_alerts');
