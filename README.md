@@ -1,5 +1,7 @@
 # YieldCave
 
+[![M8ven Score](https://m8ven.ai/badge/mcp/yieldcave-yieldcave-1pm2tr?v=122a95b1c3784f3f3a0d939c683e64f7)](https://m8ven.ai/mcp/yieldcave-yieldcave-1pm2tr?s=readme)
+
 **Machine-readable tokenized-finance data for AI agents: tokenized treasuries, stablecoin yield venues, and tokenized stocks.**
 
 YieldCave is an [MCP](https://modelcontextprotocol.io) server. Add it to Claude Desktop, Claude Code or Cursor and your agent can answer questions like:
