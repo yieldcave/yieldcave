@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.yieldcave/yieldcave",
+  "name": "com.yieldcave/yieldcave",
   "title": "YieldCave",
   "description": "Tokenized asset data for agents: treasury yields, stablecoin rates, tokenized stocks, alerts.",
   "version": "0.9.0",
