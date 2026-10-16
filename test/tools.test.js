@@ -216,9 +216,9 @@ test('plans and allowances', () => {
 
 import { applyStripeEvent, tierForSubscriptionEvent } from '../src/billing.js';
 
-function fakeDb() {
+function fakeDb(rows = [{ id: 'key-1', stripe_subscription_id: 'sub_1' }]) {
   const updates = [];
-  const db = { from: (table) => ({ update: (patch) => ({ eq: async (col, val) => { updates.push({ table, patch, where: [col, val] }); return { data: null, error: null }; } }) }) };
+  const db = { from: (table) => ({ update: (patch) => ({ eq: (col, val) => ({ select: async () => { updates.push({ table, patch, where: [col, val] }); const matched = rows.filter((r) => r[col === 'id' ? 'id' : 'stripe_subscription_id'] === val); return { data: matched.map((r) => ({ id: r.id })), error: null }; } }) }), insert: async () => ({ error: null }) }) };
   return { db, updates };
 }
 
@@ -545,4 +545,30 @@ test('every tool carries the four MCP annotation hints', () => {
   assert.equal(server._registeredTools.rwa_market_summary.annotations.readOnlyHint, true);
   assert.equal(server._registeredTools.delete_alert.annotations.destructiveHint, true);
   assert.equal(server._registeredTools.create_api_key.annotations.readOnlyHint, false);
+});
+
+import { resyncSubscription, tierForStatus } from '../src/billing.js';
+
+test('stripe: the live subscription status wins over an out-of-order event payload', async () => {
+  const stale = fakeDb();
+  const fetchSubscription = async () => ({ id: 'sub_1', status: 'canceled' });
+  const r = await applyStripeEvent({ type: 'customer.subscription.updated', data: { object: { id: 'sub_1', status: 'active' } } }, stale.db, { fetchSubscription });
+  assert.equal(r.action, 'downgraded', 'event says active, Stripe says canceled: Stripe wins');
+  assert.equal(r.source, 'stripe:canceled');
+  assert.deepEqual(stale.updates[0].patch, { tier: 'free' });
+  assert.equal(r.matched, 1);
+  const unknown = fakeDb();
+  const r2 = await applyStripeEvent({ type: 'customer.subscription.deleted', data: { object: { id: 'sub_other', status: 'canceled' } } }, unknown.db, {});
+  assert.equal(r2.matched, 0, 'an id we do not hold matches nothing, and the outcome says so');
+});
+
+test('stripe: resync reads the subscription and sets the tier', async () => {
+  const { db, updates } = fakeDb();
+  const r = await resyncSubscription('sub_1', db, async () => ({ id: 'sub_1', status: 'active', cancel_at_period_end: true }));
+  assert.deepEqual(r, { subscriptionId: 'sub_1', found: true, status: 'active', cancelAtPeriodEnd: true, tier: 'pro', matched: 1 });
+  assert.deepEqual(updates[0].patch, { tier: 'pro' });
+  const missing = await resyncSubscription('sub_x', db, async () => null);
+  assert.equal(missing.found, false);
+  assert.equal(tierForStatus('past_due'), 'pro');
+  assert.equal(tierForStatus('unpaid'), 'free');
 });
