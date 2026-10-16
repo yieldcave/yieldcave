@@ -153,13 +153,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export async function fetchEquityPages(fetchImpl = globalThis.fetch, { apiKey = null, maxPages = 4 } = {}) {
   const headers = { accept: 'application/json', ...(apiKey ? { 'x-cg-demo-api-key': apiKey } : {}) };
   const pagesByKind = {};
+  const failures = [];
   for (const [kind, category] of Object.entries(EQUITY_CATEGORIES)) {
     const pages = [];
     for (let page = 1; page <= (kind === 'stock' ? maxPages : 1); page++) {
       // Keyless CoinGecko access is throttled hard from cloud IPs: space the calls and retry once on 429.
       let r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers });
       if (r.status === 429) { await sleep(apiKey ? 2000 : 12_000); r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers }); }
-      if (!r.ok) break;
+      // A key that is out of credits or rejected (401/403/429): fall back to keyless access for this page rather than returning nothing.
+      if (apiKey && [401, 403, 429].includes(r.status)) r = await fetchImpl(`${CG}/coins/markets?vs_currency=usd&category=${category}&order=market_cap_desc&per_page=250&page=${page}`, { headers: { accept: 'application/json' } });
+      if (!r.ok) { failures.push(`${category} p${page}: HTTP ${r.status}`); break; }
       const rows = await r.json();
       if (!Array.isArray(rows) || !rows.length) break;
       pages.push(rows);
@@ -168,6 +171,9 @@ export async function fetchEquityPages(fetchImpl = globalThis.fetch, { apiKey = 
     }
     pagesByKind[kind] = pages;
   }
+  const total = Object.values(pagesByKind).reduce((n, pages) => n + pages.reduce((m, rows) => m + rows.length, 0), 0);
+  // Never hand back an empty set as if it were real data: the caller keeps the last good set when this throws.
+  if (!total) throw new Error(`CoinGecko returned no tokenized equities (${failures.join('; ') || 'empty categories'})`);
   return pagesByKind;
 }
 

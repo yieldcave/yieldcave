@@ -20,8 +20,12 @@ Deno.serve(async (req) => {
   let done = 0; let rateLimited = false;
   for (const e of todo) {
     const r = await fetch(`https://api.coingecko.com/api/v3/coins/${e.coingeckoId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false&sparkline=false`, { headers });
-    if (r.status === 429) { rateLimited = true; break; }
-    if (!r.ok) continue;
+    if (r.status === 429 || r.status === 401 || r.status === 403) { rateLimited = true; break; }
+    if (!r.ok) {
+      // Record the miss so a coin CoinGecko can't serve is not retried every 10 minutes (each retry costs a credit).
+      await db.from('equity_meta').upsert({ coingecko_id: e.coingeckoId, chains: [], homepage: null, updated_at: new Date().toISOString() });
+      continue;
+    }
     const j = await r.json();
     const chains = Object.keys(j.platforms ?? {}).filter(Boolean);
     await db.from('equity_meta').upsert({ coingecko_id: e.coingeckoId, chains, homepage: j.links?.homepage?.[0] ?? null, updated_at: new Date().toISOString() });

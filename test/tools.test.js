@@ -573,3 +573,15 @@ test('stripe: resync reads the subscription and sets the tier', async () => {
   assert.equal(tierForStatus('past_due'), 'pro');
   assert.equal(tierForStatus('unpaid'), 'free');
 });
+
+import { fetchEquityPages } from '../src/data.js';
+
+test('equity fetch: falls back to keyless when the key is refused, and throws rather than returning an empty set', async () => {
+  const row = (i) => ({ id: `t${i}`, symbol: `T${i}X`, name: `T${i} xStock`, current_price: 1, market_cap: 1e6, total_volume: 1 });
+  const seen = [];
+  const keyRefused = async (url, { headers }) => { seen.push(Boolean(headers['x-cg-demo-api-key'])); return headers['x-cg-demo-api-key'] ? new Response('{}', { status: 429 }) : Response.json([row(1)]); };
+  const pages = await fetchEquityPages(keyRefused, { apiKey: 'k', maxPages: 1 });
+  assert.equal(pages.stock[0].length, 1);
+  assert.ok(seen.includes(false), 'retried without the key');
+  await assert.rejects(fetchEquityPages(async () => new Response('{}', { status: 500 }), { maxPages: 1 }), /no tokenized equities/);
+});
