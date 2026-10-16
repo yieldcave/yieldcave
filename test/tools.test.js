@@ -534,3 +534,15 @@ test('tokenized equities: Free gets 10 rows and no premium figures; Pro gets dep
   const selfHosted = await call(null, 'list_tokenized_equities', { limit: 50 });
   assert.equal(selfHosted.equities.length, 30);
 });
+
+test('every tool carries the four MCP annotation hints', () => {
+  const server = createServer({ plan: null, history: { load: async () => [] }, alerts: {}, account: {} });
+  const tools = Object.entries(server._registeredTools);
+  assert.ok(tools.length >= 19);
+  for (const [name, t] of tools) {
+    for (const k of ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint']) assert.equal(typeof t.annotations?.[k], 'boolean', `${name} missing ${k}`);
+  }
+  assert.equal(server._registeredTools.rwa_market_summary.annotations.readOnlyHint, true);
+  assert.equal(server._registeredTools.delete_alert.annotations.destructiveHint, true);
+  assert.equal(server._registeredTools.create_api_key.annotations.readOnlyHint, false);
+});
