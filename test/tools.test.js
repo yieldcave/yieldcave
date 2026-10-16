@@ -490,12 +490,13 @@ test('every tool declares all four annotation hints; only account and alert writ
   const { tools } = await client.listTools();
   assert.equal(tools.length, 19);
   for (const t of tools) {
+    assert.ok(t.annotations?.title && t.annotations.title === t.title, `${t.name} is missing annotations.title`);
     for (const hint of ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint']) {
       assert.equal(typeof t.annotations?.[hint], 'boolean', `${t.name} is missing ${hint}`);
     }
     const isWrite = t.name in TOOL_ANNOTATIONS;
     assert.equal(t.annotations.readOnlyHint, !isWrite, `${t.name} readOnlyHint`);
-    if (!isWrite) assert.deepEqual(t.annotations, READ);
+    if (!isWrite) assert.deepEqual({ ...t.annotations, title: undefined }, { ...READ, title: undefined });
   }
   assert.equal(tools.find((t) => t.name === 'delete_alert').annotations.destructiveHint, true);
   await client.close();

@@ -29,6 +29,9 @@ export const annotationsFor = (name) => TOOL_ANNOTATIONS[name] ?? READ;
 //   plan:       a PLANS entry for the caller (hosted) or null (self-hosted: no depth limits)
 export function createServer({ loadMarket = liveLoadMarket, history = null, alerts = null, account = null, plan = null } = {}) {
   const server = new McpServer({ name: 'yieldcave', version: '0.9.0' });
+  // Every tool carries its title inside annotations too (directories read annotations.title).
+  const register = server.registerTool.bind(server);
+  server.registerTool = (name, config, cb) => register(name, { ...config, annotations: { title: config.title, ...annotationsFor(name), ...config.annotations } }, cb);
 
   server.registerTool(
     'list_rwa_yields',
