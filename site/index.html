@@ -110,7 +110,7 @@
 
   <section id="equities">
     <h2>Tokenized stocks, right now</h2>
-    <p class="sub">Top tokenized equities by market cap across xStocks, bStocks, Ondo, Robinhood, Dinari, Coinbase and others. Source: CoinGecko.</p>
+    <p class="sub">Top tokenized equities by market cap across xStocks, bStocks, Ondo, Robinhood, Dinari, Coinbase and others. <a href="https://www.coingecko.com" rel="noopener">Powered by CoinGecko</a>.</p>
     <div class="tablewrap">
       <table>
         <thead><tr><th>Token</th><th>Name</th><th class="num">Price</th><th class="num">Market cap</th><th class="num">24h volume</th></tr></thead>
@@ -134,9 +134,9 @@
     <h2>Install</h2>
     <p class="sub">Hosted. Nothing to run, no account needed to start.</p>
     <p class="sub"><strong>Claude Code</strong></p>
-    <pre>claude mcp add --transport http yieldcave https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp</pre>
+    <pre>claude mcp add --transport http yieldcave https://mcp.yieldcave.com</pre>
     <p class="sub"><strong>claude.ai</strong>: Customize → Connectors → Add custom connector → paste the URL above and choose "No sign-in". With a key (Free or Pro allowances), put the key in the URL, since claude.ai cannot send headers:</p>
-    <pre>https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp?key=yc_your_key</pre>
+    <pre>https://mcp.yieldcave.com/?key=yc_your_key</pre>
     <p class="sub">Any MCP client that speaks Streamable HTTP works. Then ask your agent: <em>"Summarize the tokenized treasury market."</em></p>
     <p class="sub"><strong>Self-host</strong> (optional, MIT licensed, Node 20+):</p>
     <pre>git clone https://github.com/yieldcave/yieldcave.git &amp;&amp; cd yieldcave &amp;&amp; npm install
@@ -170,7 +170,7 @@ npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
   </section>
 
   <footer>
-    Open source: <a href="https://github.com/yieldcave/yieldcave" rel="noopener">github.com/yieldcave/yieldcave</a>. Data: <a href="https://defillama.com" rel="noopener">DefiLlama</a>; tokenized equity data provided by <a href="https://www.coingecko.com" rel="noopener">CoinGecko</a>. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>. Information only, not financial advice.
+    Open source: <a href="https://github.com/yieldcave/yieldcave" rel="noopener">github.com/yieldcave/yieldcave</a>. Data: <a href="https://defillama.com" rel="noopener">DefiLlama</a>. Tokenized equity data: <a href="https://www.coingecko.com" rel="noopener">Powered by CoinGecko</a>. <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>. Information only, not financial advice.
   </footer>
 </div>
 
@@ -216,7 +216,7 @@ npm start           # local stdio MCP server for Claude Desktop or Cursor</pre>
     const eq = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&category=tokenized-stock&order=market_cap_desc&per_page=10&page=1').then((r) => r.json());
     document.getElementById('erows').innerHTML = eq.map((c) =>
       `<tr><td><strong>${c.symbol.toUpperCase()}</strong></td><td>${c.name}</td><td class="num">$${c.current_price?.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td><td class="num">${usd(c.market_cap || 0)}</td><td class="num">${usd(c.total_volume || 0)}</td></tr>`).join('');
-    document.getElementById('estatus').textContent = `Top 10 by market cap · over 1,000 tokenized equities tracked · source CoinGecko`;
+    document.getElementById('estatus').textContent = `Top 10 by market cap · over 1,000 tokenized equities tracked · Powered by CoinGecko`;
   } catch (e) {
     document.getElementById('erows').innerHTML = '<tr><td colspan="5">Could not load equities right now.</td></tr>';
   }

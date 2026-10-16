@@ -3,13 +3,13 @@
   "name": "com.yieldcave/yieldcave",
   "title": "YieldCave",
   "description": "Tokenized asset data for agents: treasury yields, stablecoin rates, tokenized stocks, alerts.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "websiteUrl": "https://yieldcave.com",
   "repository": { "url": "https://github.com/yieldcave/yieldcave", "source": "github" },
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp",
+      "url": "https://mcp.yieldcave.com",
       "headers": [
         { "name": "x-api-key", "description": "Optional YieldCave API key (free via the create_api_key tool, or Pro). Without it, anonymous limits apply.", "isRequired": false, "isSecret": true }
       ]

@@ -76,7 +76,7 @@ claude mcp add yieldcave -- node /Users/bjf/yieldcave/src/server.js
 YieldCave also runs in the cloud on Supabase, so claude.ai (and anyone else) can reach it without your Mac being on.
 
 ```
-https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp
+https://mcp.yieldcave.com
 ```
 
 In claude.ai: Customize → Connectors → Add → Add custom connector → paste that URL, no sign-in. The hosted version serves data from Postgres, which a scheduled job refreshes every hour, and it keeps one snapshot per day. That history powers the fifth tool, `rwa_history`.
@@ -137,7 +137,7 @@ Secrets (database password, refresh secret) live in `.env.local`, which git igno
 
 Live data is free; depth is paid. Get a key by asking your agent to call `create_api_key` with your email; send it as an `x-api-key` header (or `Authorization: Bearer`), or as `?key=yc_...` on the connector URL for claude.ai. Pro is bought with the `upgrade` tool (Stripe checkout) and managed with `manage_subscription`. Self-hosted servers have no plan limits.
 
-**claude.ai setup with a key.** Custom connectors in claude.ai cannot send request headers, so the key goes in the URL: add a custom connector with `https://ccvhvxbqtvqbhexhrjnj.supabase.co/functions/v1/mcp?key=yc_your_key` and "No sign-in". A header (`x-api-key` or `Authorization: Bearer`) wins when both are present. The server never logs query strings or keys. Treat the URL as a secret, since anyone holding it holds the key.
+**claude.ai setup with a key.** Custom connectors in claude.ai cannot send request headers, so the key goes in the URL: add a custom connector with `https://mcp.yieldcave.com/?key=yc_your_key` and "No sign-in". A header (`x-api-key` or `Authorization: Bearer`) wins when both are present. The server never logs query strings or keys. Treat the URL as a secret, since anyone holding it holds the key.
 
 Every `tools/call` is counted in the `usage_daily` table against the key, or a hashed IP for anonymous callers. Limits reset at midnight UTC. Keys are stored as SHA-256 hashes; the plain key is returned once and never again. Alerts belong to the key that created them. All of this is in `supabase/functions/mcp/index.ts`; the limits themselves are in `supabase/functions/_shared/plans.js`.
 
