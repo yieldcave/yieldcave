@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "yieldcave": {
+      "type": "streamable-http",
+      "url": "https://mcp.yieldcave.com/?profile=readonly"
+    }
+  }
+}

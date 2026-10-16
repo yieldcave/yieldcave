@@ -12,3 +12,4 @@ HANDOVER.md
 .wrangler
 .dev.vars*
 !.dev.vars.example
+yieldcave-openai-plugin.zip

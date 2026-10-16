@@ -132,6 +132,8 @@ const rpcError = (id: unknown, text: string) => Response.json({ jsonrpc: '2.0', 
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
+  // ?profile=readonly: the 14 data tools only (no alerts, keys or billing). Used for listings whose clients can't send an API key.
+  const readonly = url.searchParams.get('profile') === 'readonly';
   if (req.method === 'GET' && url.pathname.endsWith('/health')) {
     const { data } = await db.from('market_latest').select('fetched_at').eq('id', 1).maybeSingle();
     return Response.json({ ok: true, name: 'yieldcave', version: VERSION, marketFetchedAt: data?.fetched_at ?? null });
@@ -149,12 +151,12 @@ Deno.serve(async (req) => {
       const allow = allowance(caller.tier, used);
       if (!allow.allowed) return rpcError(msg.id, limitMessage('calls', caller.tier));
       if (caller.tier === 'anonymous' && toolName && KEY_TOOLS.has(toolName) && toolName !== 'create_api_key') {
-        return rpcError(msg.id, `${toolName} needs an API key. ${PLANS.free.how} Endpoint for claude.ai: ${SUPABASE_URL}/functions/v1/mcp?key=<your key>`);
+        return rpcError(msg.id, `${toolName} needs an API key. ${PLANS.free.how} Endpoint with a key: https://mcp.yieldcave.com/?key=<your key>`);
       }
     }
   }
   caller ??= await identify(req);
-  const server = createServer({ loadMarket, history, alerts: alertsFor(caller), account: accountFor(caller), plan: PLANS[caller.tier] });
+  const server = createServer({ loadMarket, history, alerts: readonly ? null : alertsFor(caller), account: readonly ? null : accountFor(caller), plan: PLANS[caller.tier] });
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   await server.connect(transport);
   const res = await transport.handleRequest(req, { parsedBody });
